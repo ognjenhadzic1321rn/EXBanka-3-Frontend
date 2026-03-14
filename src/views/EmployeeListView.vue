@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { employeeApi } from '../api/employee'
 import { usePermissions } from '../composables/usePermissions'
+import { useAuthStore } from '../stores/auth'
 import EditEmployeeDialog from '../components/EditEmployeeDialog.vue'
 import CreateEmployeeDialog from '../components/CreateEmployeeDialog.vue'
 
@@ -19,6 +20,7 @@ interface EmployeeDetail {
 interface Permission { id: string; name: string; description: string }
 
 const perms = usePermissions()
+const auth = useAuthStore()
 
 const employees = ref<EmployeeListItem[]>([])
 const total = ref(0)
@@ -108,6 +110,12 @@ function isAdmin(emp: EmployeeListItem): boolean {
   return emp.permissionNames.includes('admin')
 }
 
+const currentEmployeeId = computed(() => auth.employee?.id ?? null)
+
+function canToggleActive(emp: EmployeeListItem): boolean {
+  return perms.canActivate() && !isAdmin(emp) && emp.id !== currentEmployeeId.value
+}
+
 const totalPages = () => Math.ceil(total.value / pageSize)
 
 onMounted(() => {
@@ -180,7 +188,7 @@ onMounted(() => {
 
                 <!-- Activate/Deactivate -->
                 <button
-                  v-if="perms.canActivate()"
+                  v-if="canToggleActive(emp)"
                   :class="emp.aktivan ? 'btn-danger btn-sm' : 'btn-success btn-sm'"
                   @click="toggleActive(emp)"
                 >{{ emp.aktivan ? 'Deactivate' : 'Activate' }}</button>
