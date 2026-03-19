@@ -1,37 +1,36 @@
 <script setup lang="ts">
 import { useRouter, RouterLink, useRoute } from 'vue-router'
-import { useClientAuthStore } from '../../stores/clientAuth'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
 const route = useRoute()
-const clientAuth = useClientAuthStore()
+const auth = useAuthStore()
 
 function logout() {
-  clientAuth.logout()
-  router.push('/client/login')
+  auth.logout()
+  router.push('/login')
 }
 
 const navItems = [
-  { to: '/client/dashboard', label: 'Dashboard', icon: '⬡' },
-  { to: '/client/accounts', label: 'Računi', icon: '◈' },
-  { to: '/client/transfers', label: 'Transferi', icon: '⇄' },
-  { to: '/client/exchange', label: 'Menjačnica', icon: '↻' },
-  { to: '/client/recipients', label: 'Primaoci', icon: '◉' },
-  { to: '/client/payments', label: 'Plaćanja', icon: '▤' },
+  { to: '/employees', label: 'Zaposleni', icon: '⬡' },
+  { to: '/clients', label: 'Klijenti', icon: '◉' },
+  { to: '/accounts', label: 'Računi', icon: '◈' },
+  { to: '/accounts/new', label: 'Novi račun', icon: '+' },
 ]
 
 function isActive(to: string) {
+  if (to === '/accounts/new') return route.path === to
+  if (to === '/accounts') return route.path === '/accounts'
   return route.path === to || route.path.startsWith(to + '/')
 }
 </script>
 
 <template>
-  <div class="client-layout">
-    <!-- Sidebar -->
-    <aside class="client-sidebar">
+  <div class="emp-layout">
+    <aside class="emp-sidebar">
       <div class="sidebar-header">
         <div class="sidebar-logo">EX<span>Banka</span></div>
-        <div class="sidebar-subtitle">Klijentski portal</div>
+        <div class="sidebar-subtitle">Portal zaposlenih</div>
       </div>
 
       <nav class="sidebar-nav">
@@ -50,32 +49,30 @@ function isActive(to: string) {
       <div class="sidebar-footer">
         <div class="sidebar-user">
           <div class="sidebar-avatar">
-            {{ clientAuth.client?.ime?.charAt(0) }}{{ clientAuth.client?.prezime?.charAt(0) }}
+            {{ auth.employee?.ime?.charAt(0) }}{{ auth.employee?.prezime?.charAt(0) }}
           </div>
           <div class="sidebar-user-info">
-            <div class="sidebar-user-name">{{ clientAuth.client?.ime }} {{ clientAuth.client?.prezime }}</div>
-            <div class="sidebar-user-email">{{ clientAuth.client?.email }}</div>
+            <div class="sidebar-user-name">{{ auth.employee?.ime }} {{ auth.employee?.prezime }}</div>
+            <div class="sidebar-user-role">{{ auth.employee?.pozicija || 'Zaposleni' }}</div>
           </div>
         </div>
         <button class="sidebar-logout" @click="logout">Odjava</button>
       </div>
     </aside>
 
-    <!-- Main content -->
-    <main class="client-main">
+    <main class="emp-main">
       <RouterView />
     </main>
   </div>
 </template>
 
 <style scoped>
-.client-layout {
+.emp-layout {
   display: flex;
   min-height: 100vh;
 }
 
-/* Sidebar */
-.client-sidebar {
+.emp-sidebar {
   width: 260px;
   background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
   color: #fff;
@@ -92,17 +89,13 @@ function isActive(to: string) {
   padding: 28px 24px 20px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
 }
-
 .sidebar-logo {
   font-size: 24px;
   font-weight: 800;
   letter-spacing: -0.5px;
   color: #fff;
 }
-.sidebar-logo span {
-  color: #60a5fa;
-}
-
+.sidebar-logo span { color: #60a5fa; }
 .sidebar-subtitle {
   font-size: 11px;
   color: #64748b;
@@ -111,7 +104,6 @@ function isActive(to: string) {
   margin-top: 4px;
 }
 
-/* Navigation */
 .sidebar-nav {
   flex: 1;
   padding: 16px 12px;
@@ -119,7 +111,6 @@ function isActive(to: string) {
   flex-direction: column;
   gap: 2px;
 }
-
 .sidebar-link {
   display: flex;
   align-items: center;
@@ -132,38 +123,32 @@ function isActive(to: string) {
   font-weight: 500;
   transition: all 0.15s ease;
 }
-
 .sidebar-link:hover {
   color: #e2e8f0;
   background: rgba(255,255,255,0.06);
   text-decoration: none;
 }
-
 .sidebar-link.active {
   color: #fff;
   background: rgba(59, 130, 246, 0.2);
   box-shadow: inset 3px 0 0 #3b82f6;
 }
-
 .sidebar-icon {
   width: 20px;
   text-align: center;
   font-size: 16px;
 }
 
-/* Footer / User */
 .sidebar-footer {
   padding: 16px;
   border-top: 1px solid rgba(255,255,255,0.08);
 }
-
 .sidebar-user {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
 }
-
 .sidebar-avatar {
   width: 36px;
   height: 36px;
@@ -176,11 +161,7 @@ function isActive(to: string) {
   font-weight: 700;
   flex-shrink: 0;
 }
-
-.sidebar-user-info {
-  overflow: hidden;
-}
-
+.sidebar-user-info { overflow: hidden; }
 .sidebar-user-name {
   font-size: 13px;
   font-weight: 600;
@@ -189,15 +170,13 @@ function isActive(to: string) {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-.sidebar-user-email {
+.sidebar-user-role {
   font-size: 11px;
   color: #64748b;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .sidebar-logout {
   width: 100%;
   padding: 8px;
@@ -214,8 +193,7 @@ function isActive(to: string) {
   border-color: rgba(239, 68, 68, 0.2);
 }
 
-/* Main content area */
-.client-main {
+.emp-main {
   flex: 1;
   margin-left: 260px;
   background: #f8fafc;

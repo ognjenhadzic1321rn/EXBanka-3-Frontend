@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { clientManagementApi, type ClientDetail, type UpdateClientPayload } from '../api/clientManagement'
+import { type ClientDetail, type UpdateClientPayload } from '../api/clientManagement'
 import { useClientStore } from '../stores/client'
 
 const store = useClientStore()

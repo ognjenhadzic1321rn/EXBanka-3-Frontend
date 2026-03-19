@@ -28,20 +28,26 @@ const router = createRouter({
       meta: { public: true },
     },
     {
-      path: '/employees',
-      component: () => import('../views/EmployeeListView.vue'),
-    },
-    {
-      path: '/clients',
-      component: () => import('../views/ClientManagementView.vue'),
-    },
-    {
-      path: '/accounts',
-      component: () => import('../views/AccountPortalView.vue'),
-    },
-    {
-      path: '/accounts/new',
-      component: () => import('../views/CreateAccountView.vue'),
+      path: '/',
+      component: () => import('../views/EmployeeLayout.vue'),
+      children: [
+        {
+          path: 'employees',
+          component: () => import('../views/EmployeeListView.vue'),
+        },
+        {
+          path: 'clients',
+          component: () => import('../views/ClientManagementView.vue'),
+        },
+        {
+          path: 'accounts',
+          component: () => import('../views/AccountPortalView.vue'),
+        },
+        {
+          path: 'accounts/new',
+          component: () => import('../views/CreateAccountView.vue'),
+        },
+      ],
     },
     ...clientRoutes,
   ],
