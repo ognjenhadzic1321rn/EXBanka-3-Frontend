@@ -19,6 +19,7 @@ export interface CreateAccountPayload {
   tip: string   // 'tekuci' | 'devizni'
   vrsta: string // 'licni' | 'poslovni'
   naziv?: string
+  pocetnoStanje?: number
 }
 
 export interface AccountProto {
@@ -40,13 +41,14 @@ export interface AccountProto {
 
 export const accountApi = {
   create: (data: CreateAccountPayload) =>
-    api.post('/accounts', {
-      client_id:   data.clientId,
-      firma_id:    data.firmaId ?? 0,
-      currency_id: data.currencyId,
-      tip:         data.tip,
-      vrsta:       data.vrsta,
-      naziv:       data.naziv ?? '',
+    api.post('/accounts/create', {
+      clientId:      data.clientId,
+      firmaId:       data.firmaId ?? 0,
+      currencyId:    data.currencyId,
+      tip:           data.tip,
+      vrsta:         data.vrsta,
+      naziv:         data.naziv ?? '',
+      pocetnoStanje: data.pocetnoStanje ?? 0,
     }),
 
   get: (id: string) => api.get(`/accounts/${id}`),

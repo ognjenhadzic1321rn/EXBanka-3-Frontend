@@ -22,12 +22,23 @@ export const useAuthStore = defineStore('auth', () => {
   const isLoggedIn = computed(() => !!accessToken.value)
   const permissions = computed(() => employee.value?.permissions ?? [])
 
+  const ROLE_LEVELS: Record<string, number> = {
+    employeeAdmin: 4,
+    employeeSupervisor: 3,
+    employeeAgent: 2,
+    employeeBasic: 1,
+  }
+
   function hasPermission(perm: string): boolean {
-    return permissions.value.includes('admin') || permissions.value.includes(perm)
+    const requiredLevel = ROLE_LEVELS[perm] ?? 0
+    if (requiredLevel > 0) {
+      return permissions.value.some(p => (ROLE_LEVELS[p] ?? 0) >= requiredLevel)
+    }
+    return permissions.value.includes(perm)
   }
 
   function isAdmin(): boolean {
-    return permissions.value.includes('admin')
+    return permissions.value.includes('employeeAdmin')
   }
 
   async function login(email: string, password: string) {

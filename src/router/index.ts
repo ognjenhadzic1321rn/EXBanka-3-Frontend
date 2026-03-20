@@ -6,7 +6,7 @@ import { clientRoutes } from './clientRoutes'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', redirect: '/employees' },
+    { path: '/', redirect: '/clients' },
     {
       path: '/login',
       component: () => import('../views/LoginView.vue'),
@@ -34,6 +34,7 @@ const router = createRouter({
         {
           path: 'employees',
           component: () => import('../views/EmployeeListView.vue'),
+          meta: { adminOnly: true },
         },
         {
           path: 'clients',
@@ -64,7 +65,8 @@ router.beforeEach((to) => {
 
   // Employee routes
   if (!to.meta.public && !auth.isLoggedIn) return '/login'
-  if (to.path === '/login' && auth.isLoggedIn) return '/employees'
+  if (to.path === '/login' && auth.isLoggedIn) return '/clients'
+  if (to.meta.adminOnly && !auth.hasPermission('employeeAdmin')) return '/clients'
 })
 
 export default router

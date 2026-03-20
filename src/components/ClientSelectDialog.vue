@@ -4,7 +4,7 @@ import { clientManagementApi, type ClientListItem, type CreateClientPayload } fr
 
 const emit = defineEmits<{
   close: []
-  selected: [clientId: string]
+  selected: [clientId: string, label: string]
 }>()
 
 type Mode = 'search' | 'create'
@@ -37,7 +37,7 @@ async function handleSearch() {
 }
 
 function selectClient(client: ClientListItem) {
-  emit('selected', client.id)
+  emit('selected', client.id, `${client.ime} ${client.prezime}`)
 }
 
 // --- create state ---
@@ -68,8 +68,10 @@ async function handleCreate() {
       adresa: createForm.value.adresa,
     }
     const res = await clientManagementApi.create(payload)
-    const newId = res.data.client?.id ?? res.data.id
-    emit('selected', String(newId))
+    const newClient = res.data.client
+    const newId = newClient?.id ?? res.data.id
+    const newLabel = newClient ? `${newClient.ime} ${newClient.prezime}` : `Klijent #${newId}`
+    emit('selected', String(newId), newLabel)
   } catch (e: any) {
     createError.value = e.response?.data?.message || 'Failed to create client.'
   } finally {

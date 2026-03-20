@@ -1,92 +1,112 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAccountStore } from '../stores/account'
-import { CURRENCIES, type AccountProto } from '../api/account'
+import { clientManagementApi } from '../api/clientManagement'
 
 const router = useRouter()
 const store = useAccountStore()
 
-const selectedAccount = ref<AccountProto | null>(null)
-const detailLoading = ref(false)
+// Client name lookup
+const clientMap = ref<Record<string, { ime: string; prezime: string }>>({})
 
-async function openDetail(account: AccountProto) {
-  detailLoading.value = true
+async function loadClientNames() {
   try {
-    selectedAccount.value = await store.getAccount(account.id)
-  } catch {
-    store.error = 'Failed to load account details.'
-  } finally {
-    detailLoading.value = false
-  }
+    const res = await clientManagementApi.list({ page: 1, pageSize: 1000 })
+    const clients = res.data.clients ?? []
+    const map: Record<string, { ime: string; prezime: string }> = {}
+    for (const c of clients) {
+      map[c.id] = { ime: c.ime, prezime: c.prezime }
+    }
+    clientMap.value = map
+  } catch { /* ignore */ }
 }
+
+function clientName(clientId: string): string {
+  const c = clientMap.value[clientId]
+  return c ? `${c.prezime} ${c.ime}` : '—'
+}
+
+function clientPrezime(clientId: string): string {
+  return clientMap.value[clientId]?.prezime ?? ''
+}
+
+// Sort accounts by client prezime
+const sortedAccounts = computed(() => {
+  return [...store.accounts].sort((a, b) =>
+    clientPrezime(a.clientId).localeCompare(clientPrezime(b.clientId), 'sr-RS')
+  )
+})
+
+// Filters
+const filterName = ref('')
+const filterBrojRacuna = ref('')
 
 function applyFilters() {
   store.setFilters({
-    clientName: store.filters.clientName,
-    tip:        store.filters.tip,
-    vrsta:      store.filters.vrsta,
-    status:     store.filters.status,
-    currencyId: store.filters.currencyId,
+    clientName: filterName.value,
   })
   store.fetchAllAccounts()
 }
 
 function clearFilters() {
+  filterName.value = ''
+  filterBrojRacuna.value = ''
   store.clearFilters()
   store.fetchAllAccounts()
 }
 
-function statusBadgeClass(status: string) {
-  switch (status) {
-    case 'aktivan':   return 'badge badge-green'
-    case 'blokiran':  return 'badge badge-red'
-    case 'zatvoren':  return 'badge'
-    default:          return 'badge'
-  }
+// Filter locally by broj racuna (backend doesn't support it)
+const filteredAccounts = computed(() => {
+  if (!filterBrojRacuna.value) return sortedAccounts.value
+  const q = filterBrojRacuna.value.toLowerCase()
+  return sortedAccounts.value.filter(a => a.brojRacuna.toLowerCase().includes(q))
+})
+
+function tipLabel(tip: string) {
+  return tip === 'tekuci' ? 'Tekući' : tip === 'devizni' ? 'Devizni' : tip
+}
+
+function vrstaLabel(vrsta: string) {
+  return vrsta === 'licni' ? 'Lični' : vrsta === 'poslovni' ? 'Poslovni' : vrsta
+}
+
+function openCards(account: any) {
+  // Sprint 3: kartice — za sad placeholder
+  alert(`Stranica kartica za račun ${account.brojRacuna} — biće implementirana u Sprint 3.`)
 }
 
 const totalPages = () => Math.ceil(store.total / store.pageSize)
 
-onMounted(() => store.fetchAllAccounts())
+onMounted(async () => {
+  await Promise.all([
+    store.fetchAllAccounts(),
+    loadClientNames(),
+  ])
+})
 </script>
 
 <template>
   <div class="page-content">
     <div class="page-header">
-      <h1>Accounts</h1>
-      <button class="btn-primary" @click="router.push('/accounts/new')">+ Create Account</button>
+      <h1>Upravljanje računima</h1>
+      <button class="btn-primary" @click="router.push('/accounts/new')">+ Novi račun</button>
     </div>
 
     <!-- Filters -->
     <div class="filters">
       <input
-        v-model="store.filters.clientName"
-        placeholder="Filter by client name"
+        v-model="filterName"
+        placeholder="Pretraži po imenu ili prezimenu vlasnika"
         @keyup.enter="applyFilters"
       />
-      <select v-model="store.filters.tip" @change="applyFilters">
-        <option value="">All types</option>
-        <option value="tekuci">Tekući</option>
-        <option value="devizni">Devizni</option>
-      </select>
-      <select v-model="store.filters.vrsta" @change="applyFilters">
-        <option value="">All kinds</option>
-        <option value="licni">Lični</option>
-        <option value="poslovni">Poslovni</option>
-      </select>
-      <select v-model="store.filters.status" @change="applyFilters">
-        <option value="">All statuses</option>
-        <option value="aktivan">Aktivan</option>
-        <option value="blokiran">Blokiran</option>
-        <option value="zatvoren">Zatvoren</option>
-      </select>
-      <select v-model="store.filters.currencyId" @change="applyFilters">
-        <option :value="undefined">All currencies</option>
-        <option v-for="c in CURRENCIES" :key="c.id" :value="c.id">{{ c.kod }}</option>
-      </select>
-      <button class="btn-primary" @click="applyFilters">Search</button>
-      <button class="btn-secondary" @click="clearFilters">Clear</button>
+      <input
+        v-model="filterBrojRacuna"
+        placeholder="Pretraži po broju računa"
+        @keyup.enter="applyFilters"
+      />
+      <button class="btn-primary" @click="applyFilters">Pretraži</button>
+      <button class="btn-secondary" @click="clearFilters">Poništi</button>
     </div>
 
     <p v-if="store.error" class="global-error" style="margin-bottom:12px">{{ store.error }}</p>
@@ -96,39 +116,29 @@ onMounted(() => store.fetchAllAccounts())
       <table>
         <thead>
           <tr>
-            <th>Account Number</th>
-            <th>Client</th>
-            <th>Currency</th>
-            <th>Type</th>
-            <th>Kind</th>
-            <th>Balance</th>
-            <th>Status</th>
+            <th>Broj računa</th>
+            <th>Ime i prezime vlasnika</th>
+            <th>Vrsta</th>
+            <th>Tip</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="store.loading">
-            <td colspan="7" style="text-align:center;padding:24px;color:#6b7280">Loading...</td>
+            <td colspan="4" style="text-align:center;padding:24px;color:#6b7280">Učitavam...</td>
           </tr>
-          <tr v-else-if="store.accounts.length === 0">
-            <td colspan="7" style="text-align:center;padding:24px;color:#6b7280">No accounts found.</td>
+          <tr v-else-if="filteredAccounts.length === 0">
+            <td colspan="4" style="text-align:center;padding:24px;color:#6b7280">Nema pronađenih računa.</td>
           </tr>
           <tr
-            v-for="account in store.accounts"
+            v-for="account in filteredAccounts"
             :key="account.id"
             style="cursor:pointer"
-            @click="openDetail(account)"
+            @click="openCards(account)"
           >
             <td><code style="font-size:13px">{{ account.brojRacuna }}</code></td>
-            <td>{{ account.clientId ? `#${account.clientId}` : '—' }}</td>
-            <td>{{ account.currencyKod }}</td>
-            <td style="text-transform:capitalize">{{ account.tip }}</td>
-            <td style="text-transform:capitalize">{{ account.vrsta }}</td>
-            <td>{{ Number(account.stanje).toLocaleString('sr-RS', { minimumFractionDigits: 2 }) }}</td>
-            <td>
-              <span :class="statusBadgeClass(account.status)">
-                {{ account.status }}
-              </span>
-            </td>
+            <td style="font-weight:500">{{ clientName(account.clientId) }}</td>
+            <td>{{ vrstaLabel(account.vrsta) }}</td>
+            <td>{{ tipLabel(account.tip) }}</td>
           </tr>
         </tbody>
       </table>
@@ -137,62 +147,8 @@ onMounted(() => store.fetchAllAccounts())
     <!-- Pagination -->
     <div v-if="store.total > store.pageSize" class="pagination">
       <button class="btn-secondary btn-sm" :disabled="store.page <= 1" @click="store.page--; store.fetchAllAccounts()">←</button>
-      <span>Page {{ store.page }} of {{ totalPages() }} ({{ store.total }} total)</span>
+      <span>Strana {{ store.page }} od {{ totalPages() }} ({{ store.total }} ukupno)</span>
       <button class="btn-secondary btn-sm" :disabled="store.page >= totalPages()" @click="store.page++; store.fetchAllAccounts()">→</button>
-    </div>
-  </div>
-
-  <!-- Account Detail Modal -->
-  <div v-if="selectedAccount" class="modal-overlay" @click.self="selectedAccount = null">
-    <div class="modal">
-      <div class="modal-header">
-        <h2>Account Details</h2>
-        <button class="modal-close" @click="selectedAccount = null">✕</button>
-      </div>
-      <div class="modal-body">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-          <div>
-            <div style="font-size:12px;color:#6b7280;margin-bottom:2px">Account Number</div>
-            <code>{{ selectedAccount.brojRacuna }}</code>
-          </div>
-          <div>
-            <div style="font-size:12px;color:#6b7280;margin-bottom:2px">Status</div>
-            <span :class="statusBadgeClass(selectedAccount.status)">{{ selectedAccount.status }}</span>
-          </div>
-          <div>
-            <div style="font-size:12px;color:#6b7280;margin-bottom:2px">Currency</div>
-            <div>{{ selectedAccount.currencyKod }}</div>
-          </div>
-          <div>
-            <div style="font-size:12px;color:#6b7280;margin-bottom:2px">Type / Kind</div>
-            <div>{{ selectedAccount.tip }} / {{ selectedAccount.vrsta }}</div>
-          </div>
-          <div>
-            <div style="font-size:12px;color:#6b7280;margin-bottom:2px">Balance</div>
-            <div>{{ Number(selectedAccount.stanje).toLocaleString('sr-RS', { minimumFractionDigits: 2 }) }}</div>
-          </div>
-          <div>
-            <div style="font-size:12px;color:#6b7280;margin-bottom:2px">Available</div>
-            <div>{{ Number(selectedAccount.raspolozivoStanje).toLocaleString('sr-RS', { minimumFractionDigits: 2 }) }}</div>
-          </div>
-          <div>
-            <div style="font-size:12px;color:#6b7280;margin-bottom:2px">Daily Limit</div>
-            <div>{{ Number(selectedAccount.dnevniLimit).toLocaleString('sr-RS') }}</div>
-          </div>
-          <div>
-            <div style="font-size:12px;color:#6b7280;margin-bottom:2px">Monthly Limit</div>
-            <div>{{ Number(selectedAccount.mesecniLimit).toLocaleString('sr-RS') }}</div>
-          </div>
-          <div v-if="selectedAccount.naziv">
-            <div style="font-size:12px;color:#6b7280;margin-bottom:2px">Name</div>
-            <div>{{ selectedAccount.naziv }}</div>
-          </div>
-        </div>
-        <!-- No card admin — Sprint 2 guardrail -->
-      </div>
-      <div class="modal-footer">
-        <button class="btn-secondary" @click="selectedAccount = null">Close</button>
-      </div>
     </div>
   </div>
 </template>

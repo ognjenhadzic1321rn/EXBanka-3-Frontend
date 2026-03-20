@@ -1,22 +1,34 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRouter, RouterLink, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { usePermissions } from '../composables/usePermissions'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const perms = usePermissions()
 
 function logout() {
   auth.logout()
   router.push('/login')
 }
 
-const navItems = [
-  { to: '/employees', label: 'Zaposleni', icon: '⬡' },
-  { to: '/clients', label: 'Klijenti', icon: '◉' },
-  { to: '/accounts', label: 'Računi', icon: '◈' },
-  { to: '/accounts/new', label: 'Novi račun', icon: '+' },
+const allNavItems = [
+  { to: '/employees', label: 'Zaposleni', icon: '⬡', perm: 'manageAll' },
+  { to: '/clients', label: 'Klijenti', icon: '◉', perm: 'clients' },
+  { to: '/accounts', label: 'Računi', icon: '◈', perm: 'bankOps' },
+  { to: '/accounts/new', label: 'Novi račun', icon: '+', perm: 'bankOps' },
 ]
+
+const navItems = computed(() =>
+  allNavItems.filter(item => {
+    if (item.perm === 'manageAll') return perms.canManageAll()
+    if (item.perm === 'clients') return perms.canManageClients()
+    if (item.perm === 'bankOps') return perms.canBankOperations()
+    return true
+  })
+)
 
 function isActive(to: string) {
   if (to === '/accounts/new') return route.path === to

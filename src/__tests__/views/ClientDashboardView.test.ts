@@ -93,7 +93,7 @@ describe('ClientDashboardView', () => {
     vi.mocked(recipientApi.listByClient).mockResolvedValue({ data: { recipients: mockRecipients } })
   })
 
-  // Section 1: Accounts
+  // Section 1: Header & Stats
   it('renders welcome heading with client name', async () => {
     const wrapper = mount(ClientDashboardView)
     await flushPromises()
@@ -101,16 +101,26 @@ describe('ClientDashboardView', () => {
     expect(wrapper.text()).toContain('Ana')
   })
 
+  it('renders stats cards', async () => {
+    const wrapper = mount(ClientDashboardView)
+    await flushPromises()
+    expect(wrapper.text()).toContain('Ukupno stanje')
+    expect(wrapper.text()).toContain('Broj računa')
+    expect(wrapper.text()).toContain('Transakcije')
+    expect(wrapper.text()).toContain('Primaoci')
+  })
+
+  // Section 2: Accounts
   it('renders Moji računi section', async () => {
     const wrapper = mount(ClientDashboardView)
     await flushPromises()
     expect(wrapper.text()).toContain('Moji računi')
   })
 
-  it('shows account summary cards for each account', async () => {
+  it('shows account cards for each account', async () => {
     const wrapper = mount(ClientDashboardView)
     await flushPromises()
-    const cards = wrapper.findAll('.account-summary-card')
+    const cards = wrapper.findAll('.account-card')
     expect(cards).toHaveLength(2)
     expect(wrapper.text()).toContain('RSD račun')
     expect(wrapper.text()).toContain('EUR račun')
@@ -123,7 +133,7 @@ describe('ClientDashboardView', () => {
     expect(wrapper.text()).toContain('500')
   })
 
-  // Section 2: Recent transactions
+  // Section 3: Recent transactions
   it('renders Poslednje transakcije section', async () => {
     const wrapper = mount(ClientDashboardView)
     await flushPromises()
@@ -133,13 +143,13 @@ describe('ClientDashboardView', () => {
   it('shows combined recent transfers and payments', async () => {
     const wrapper = mount(ClientDashboardView)
     await flushPromises()
-    const rows = wrapper.findAll('.activity-row')
-    expect(rows).toHaveLength(2)
+    const items = wrapper.findAll('.activity-item')
+    expect(items).toHaveLength(2)
     expect(wrapper.text()).toContain('Kirija')
     expect(wrapper.text()).toContain('Struja')
   })
 
-  // Section 3: Exchange rates
+  // Section 4: Exchange rates
   it('renders Kursna lista section', async () => {
     const wrapper = mount(ClientDashboardView)
     await flushPromises()
@@ -149,113 +159,9 @@ describe('ClientDashboardView', () => {
   it('loads and displays exchange rates', async () => {
     const wrapper = mount(ClientDashboardView)
     await flushPromises()
-    const rows = wrapper.findAll('.rate-row')
-    expect(rows).toHaveLength(2)
-    expect(wrapper.text()).toContain('EUR/RSD')
+    const items = wrapper.findAll('.rate-item')
+    expect(items).toHaveLength(2)
     expect(wrapper.text()).toContain('117.5000')
-  })
-
-  // Section 4: Quick payment
-  it('renders Brzo plaćanje section', async () => {
-    const wrapper = mount(ClientDashboardView)
-    await flushPromises()
-    expect(wrapper.text()).toContain('Brzo plaćanje')
-  })
-
-  it('quick payment form shows account and recipient dropdowns', async () => {
-    const wrapper = mount(ClientDashboardView)
-    await flushPromises()
-    expect(wrapper.text()).toContain('EPS')
-    expect(wrapper.text()).toContain('RSD račun')
-  })
-
-  it('quick payment submit with empty fields shows error', async () => {
-    const wrapper = mount(ClientDashboardView)
-    await flushPromises()
-
-    const platiBtn = wrapper.findAll('button').find(b => b.text() === 'Plati')
-    await platiBtn!.trigger('click')
-    expect(wrapper.text()).toContain('Izaberite račun')
-  })
-
-  it('quick payment submit creates payment and moves to verify step', async () => {
-    vi.mocked(paymentApi.create).mockResolvedValueOnce({
-      data: { payment: { id: 'p99', status: 'u_obradi', iznos: 500, svrha: 'Brzo plaćanje',
-        racunPosiljaocaId: '1', racunPrimaocaBroj: '999999999999999999',
-        sifraPlacanja: '289', pozivNaBroj: '', verifikacioniKod: '654321',
-        vremeTransakcije: '2026-03-10T10:00:00Z' } },
-    })
-
-    const wrapper = mount(ClientDashboardView)
-    await flushPromises()
-
-    const selects = wrapper.findAll('select')
-    const fromSelect = selects.find(s => s.text().includes('Račun'))
-    const recipientSelect = selects.find(s => s.text().includes('Primalac'))
-    await fromSelect!.setValue('1')
-    await recipientSelect!.setValue('10')
-    await wrapper.find('input[type="number"]').setValue('500')
-
-    await wrapper.findAll('button').find(b => b.text() === 'Plati')!.trigger('click')
-    await flushPromises()
-
-    expect(paymentApi.create).toHaveBeenCalledOnce()
-    expect(wrapper.text()).toContain('verifikacioni kod')
-  })
-
-  it('quick payment verify with correct code shows success', async () => {
-    vi.mocked(paymentApi.create).mockResolvedValueOnce({
-      data: { payment: { id: 'p99', status: 'u_obradi', iznos: 500, svrha: 'Brzo plaćanje',
-        racunPosiljaocaId: '1', racunPrimaocaBroj: '999999999999999999',
-        sifraPlacanja: '289', pozivNaBroj: '', verifikacioniKod: '654321',
-        vremeTransakcije: '2026-03-10T10:00:00Z' } },
-    })
-    vi.mocked(paymentApi.verify).mockResolvedValueOnce({
-      data: { payment: { id: 'p99', status: 'uspesno' } },
-    })
-
-    const wrapper = mount(ClientDashboardView)
-    await flushPromises()
-
-    const selects = wrapper.findAll('select')
-    await selects.find(s => s.text().includes('Račun'))!.setValue('1')
-    await selects.find(s => s.text().includes('Primalac'))!.setValue('10')
-    await wrapper.find('input[type="number"]').setValue('500')
-    await wrapper.findAll('button').find(b => b.text() === 'Plati')!.trigger('click')
-    await flushPromises()
-
-    await wrapper.find('input[maxlength="6"]').setValue('654321')
-    await wrapper.findAll('button').find(b => b.text() === 'Potvrdi')!.trigger('click')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('Plaćanje uspešno')
-  })
-
-  it('quick payment reset after success returns to form', async () => {
-    vi.mocked(paymentApi.create).mockResolvedValueOnce({
-      data: { payment: { id: 'p99', status: 'u_obradi', iznos: 500, svrha: 'Brzo plaćanje',
-        racunPosiljaocaId: '1', racunPrimaocaBroj: '999999999999999999',
-        sifraPlacanja: '289', pozivNaBroj: '', vremeTransakcije: '2026-03-10T10:00:00Z' } },
-    })
-    vi.mocked(paymentApi.verify).mockResolvedValueOnce({
-      data: { payment: { id: 'p99', status: 'uspesno' } },
-    })
-
-    const wrapper = mount(ClientDashboardView)
-    await flushPromises()
-
-    const selects = wrapper.findAll('select')
-    await selects.find(s => s.text().includes('Račun'))!.setValue('1')
-    await selects.find(s => s.text().includes('Primalac'))!.setValue('10')
-    await wrapper.find('input[type="number"]').setValue('500')
-    await wrapper.findAll('button').find(b => b.text() === 'Plati')!.trigger('click')
-    await flushPromises()
-    await wrapper.find('input[maxlength="6"]').setValue('654321')
-    await wrapper.findAll('button').find(b => b.text() === 'Potvrdi')!.trigger('click')
-    await flushPromises()
-
-    await wrapper.findAll('button').find(b => b.text() === 'Novo plaćanje')!.trigger('click')
-    expect(wrapper.text()).toContain('Plati')
   })
 
   // Section 5: Recipients
@@ -263,26 +169,23 @@ describe('ClientDashboardView', () => {
     const wrapper = mount(ClientDashboardView)
     await flushPromises()
     expect(wrapper.text()).toContain('Primaoci')
-    const items = wrapper.findAll('.recipient-item')
-    expect(items).toHaveLength(2)
+    const cards = wrapper.findAll('.recipient-card')
+    expect(cards).toHaveLength(2)
     expect(wrapper.text()).toContain('EPS')
     expect(wrapper.text()).toContain('Telenor')
   })
 
-  // Section 6: Notifications
-  it('renders Obaveštenja section', async () => {
+  // Section 6: Quick actions
+  it('renders Brze akcije section with action links', async () => {
     const wrapper = mount(ClientDashboardView)
     await flushPromises()
-    expect(wrapper.text()).toContain('Obaveštenja')
+    expect(wrapper.text()).toContain('Brze akcije')
+    expect(wrapper.text()).toContain('Novi transfer')
+    expect(wrapper.text()).toContain('Novo plaćanje')
+    expect(wrapper.text()).toContain('Menjačnica')
   })
 
-  it('shows notification items derived from recent activity', async () => {
-    const wrapper = mount(ClientDashboardView)
-    await flushPromises()
-    const items = wrapper.findAll('.notification-item')
-    expect(items.length).toBeGreaterThan(0)
-  })
-
+  // Data loading
   it('loads all data on mount', async () => {
     mount(ClientDashboardView)
     await flushPromises()
