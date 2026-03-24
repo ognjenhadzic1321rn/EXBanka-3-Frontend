@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { usePaymentStore } from '../../stores/payment'
 import { useClientAuthStore } from '../../stores/clientAuth'
 import type { PaymentItem } from '../../api/payment'
+import jsPDF from 'jspdf'
 
 const router = useRouter()
 const clientAuthStore = useClientAuthStore()
@@ -50,6 +51,49 @@ function statusClass(s: string) {
     case 'stornirano': return 'pst-neutral'
     default: return 'pst-neutral'
   }
+}
+
+function printPotvrda(p: PaymentItem) {
+  const doc = new jsPDF()
+  const date = new Date(p.vremeTransakcije).toLocaleString('sr-RS')
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(18)
+  doc.text('Potvrda o plaćanju', 105, 20, { align: 'center' })
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10)
+  doc.setTextColor(120)
+  doc.text('EXBanka — potvrda transakcije', 105, 28, { align: 'center' })
+  doc.line(14, 33, 196, 33)
+
+  doc.setTextColor(0)
+  doc.setFontSize(12)
+  const rows: [string, string][] = [
+    ['ID transakcije', `#${p.id}`],
+    ['Status', statusLabel(p.status)],
+    ['Iznos', `${p.iznos.toLocaleString('sr-RS', { minimumFractionDigits: 2 })} RSD`],
+    ['Račun primaoca', p.racunPrimaocaBroj],
+    ['Šifra plaćanja', p.sifraPlacanja || '—'],
+    ['Poziv na broj', p.pozivNaBroj || '—'],
+    ['Svrha', p.svrha || '—'],
+    ['Datum i vreme', date],
+  ]
+  let y = 45
+  for (const [label, value] of rows) {
+    doc.setFont('helvetica', 'bold')
+    doc.text(label + ':', 14, y)
+    doc.setFont('helvetica', 'normal')
+    doc.text(value, 80, y)
+    y += 10
+  }
+
+  doc.line(14, y + 2, 196, y + 2)
+  doc.setFontSize(9)
+  doc.setTextColor(150)
+  doc.text('Ovaj dokument je automatski generisan i važi bez potpisa.', 105, y + 10, { align: 'center' })
+
+  doc.save(`potvrda-placanja-${p.id}.pdf`)
 }
 
 onMounted(async () => {
@@ -170,6 +214,7 @@ onMounted(async () => {
         </div>
         <div class="pv-modal-footer">
           <button class="pv-btn pv-btn-sec" @click="selectedPayment = null">Zatvori</button>
+          <button class="pv-btn pv-btn-primary" @click="printPotvrda(selectedPayment!)">Štampaj potvrdu</button>
         </div>
       </div>
     </div>
@@ -271,7 +316,7 @@ onMounted(async () => {
 .pv-modal-close { background: none; border: none; font-size: 20px; color: #94a3b8; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
 .pv-modal-close:hover { background: #f1f5f9; }
 .pv-modal-body { padding: 24px; }
-.pv-modal-footer { padding: 16px 24px; border-top: 1px solid #f1f5f9; display: flex; justify-content: flex-end; }
+.pv-modal-footer { padding: 16px 24px; border-top: 1px solid #f1f5f9; display: flex; justify-content: space-between; gap: 8px; }
 
 .pv-detail-status {
   display: inline-block; padding: 4px 12px; border-radius: 20px;

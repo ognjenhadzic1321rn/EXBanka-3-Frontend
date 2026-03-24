@@ -27,6 +27,19 @@ vi.mock('../../api/clientAuth', () => ({
   default: { get: vi.fn(), post: vi.fn(), interceptors: { request: { use: vi.fn() } } },
 }))
 
+vi.mock('jspdf', () => {
+  const mockSave = vi.fn()
+  const mockDoc = {
+    setFont: vi.fn().mockReturnThis(),
+    setFontSize: vi.fn().mockReturnThis(),
+    setTextColor: vi.fn().mockReturnThis(),
+    text: vi.fn().mockReturnThis(),
+    line: vi.fn().mockReturnThis(),
+    save: mockSave,
+  }
+  return { default: vi.fn(() => mockDoc), __mockSave: mockSave }
+})
+
 import { paymentApi } from '../../api/payment'
 
 const mockPayments = [
@@ -183,6 +196,15 @@ describe('ClientPaymentsView', () => {
 
     await wrapper.findAll('button').find(b => b.text().includes('Novo plaćanje'))!.trigger('click')
     expect(mockPush).toHaveBeenCalledWith('/client/payments/new')
+  })
+
+  it('detail modal shows Stampaj potvrdu button', async () => {
+    const wrapper = mount(ClientPaymentsView)
+    await flushPromises()
+
+    await wrapper.find('.pv-card').trigger('click')
+    expect(wrapper.find('.pv-overlay').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Štampaj potvrdu')
   })
 
   it('shows filter dropdowns and date inputs', async () => {
