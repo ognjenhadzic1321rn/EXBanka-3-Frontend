@@ -52,11 +52,12 @@ describe('ClientExchangeView', () => {
     expect(exchangeApi.getRates).toHaveBeenCalledOnce()
   })
 
-  it('displays all currency pairs in rate table', async () => {
+  it('displays RSD currency pairs in rate list', async () => {
     const wrapper = mount(ClientExchangeView)
     await flushPromises()
-    const rows = wrapper.findAll('tbody tr')
-    expect(rows).toHaveLength(4)
+    // rsdRates shows only X→RSD pairs (EUR→RSD and USD→RSD from mock)
+    const rows = wrapper.findAll('.ex-rate-row')
+    expect(rows).toHaveLength(2)
   })
 
   it('shows from, to and rate in table', async () => {
@@ -64,14 +65,14 @@ describe('ClientExchangeView', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('EUR')
     expect(wrapper.text()).toContain('RSD')
-    expect(wrapper.text()).toContain('117.5000')
+    expect(wrapper.text()).toContain('117.50')
   })
 
-  it('shows inverse rate column', async () => {
+  it('shows inverse rate as 1 RSD = X currency', async () => {
     const wrapper = mount(ClientExchangeView)
     await flushPromises()
     // inverse of 117.5 = 0.0085...
-    expect(wrapper.text()).toContain('Inverzni kurs')
+    expect(wrapper.text()).toContain('1 RSD =')
     expect(wrapper.text()).toContain('0.0085')
   })
 

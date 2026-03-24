@@ -9,6 +9,7 @@ vi.mock('../../api/clientManagement', () => ({
     list: vi.fn(),
     get: vi.fn(),
     update: vi.fn(),
+    updatePermissions: vi.fn(),
   },
 }))
 
@@ -33,9 +34,9 @@ describe('ClientManagementView', () => {
     await flushPromises()
 
     expect(wrapper.find('table').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Name')
-    expect(wrapper.text()).toContain('Email')
-    expect(wrapper.text()).toContain('Status')
+    expect(wrapper.text()).toContain('Ime i prezime')
+    expect(wrapper.text()).toContain('Email adresa')
+    expect(wrapper.text()).toContain('Broj telefona')
   })
 
   it('renders client rows after fetch', async () => {
@@ -44,8 +45,9 @@ describe('ClientManagementView', () => {
 
     const rows = wrapper.findAll('tbody tr')
     expect(rows).toHaveLength(2)
-    expect(wrapper.text()).toContain('Ana Jović')
-    expect(wrapper.text()).toContain('Marko Petrović')
+    // Component renders Prezime + Ime (sorted by prezime)
+    expect(wrapper.text()).toContain('Jović Ana')
+    expect(wrapper.text()).toContain('Petrović Marko')
   })
 
   it('renders filter inputs for email and name', async () => {
@@ -63,29 +65,29 @@ describe('ClientManagementView', () => {
     expect(clientManagementApi.list).toHaveBeenCalledTimes(1)
   })
 
-  it('opens edit dialog when Edit button clicked', async () => {
+  it('opens edit dialog when row clicked', async () => {
     const detail = { id: '1', ime: 'Ana', prezime: 'Jović', datumRodjenja: '1990-01-01', pol: 'F', email: 'ana@gmail.com', brojTelefona: '061', adresa: 'Ulica 1', aktivan: true }
     vi.mocked(clientManagementApi.get).mockResolvedValueOnce({ data: { client: detail } })
 
     const wrapper = mount(ClientManagementView)
     await flushPromises()
 
-    const editBtn = wrapper.findAll('button').find(b => b.text() === 'Edit')
-    await editBtn!.trigger('click')
+    const rows = wrapper.findAll('tbody tr')
+    await rows[0].trigger('click')
     await flushPromises()
 
     expect(wrapper.find('.modal-overlay').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Edit Client')
+    expect(wrapper.text()).toContain('Izmena klijenta')
   })
 
-  it('closes edit dialog when Cancel clicked', async () => {
+  it('closes edit dialog when X button clicked', async () => {
     const detail = { id: '1', ime: 'Ana', prezime: 'Jović', datumRodjenja: '1990-01-01', pol: 'F', email: 'ana@gmail.com', brojTelefona: '061', adresa: 'Ulica 1', aktivan: true }
     vi.mocked(clientManagementApi.get).mockResolvedValueOnce({ data: { client: detail } })
 
     const wrapper = mount(ClientManagementView)
     await flushPromises()
 
-    await wrapper.findAll('button').find(b => b.text() === 'Edit')!.trigger('click')
+    await wrapper.findAll('tbody tr')[0].trigger('click')
     await flushPromises()
     expect(wrapper.find('.modal-overlay').exists()).toBe(true)
 
@@ -93,11 +95,12 @@ describe('ClientManagementView', () => {
     expect(wrapper.find('.modal-overlay').exists()).toBe(false)
   })
 
-  it('shows Active/Inactive status badges', async () => {
+  it('shows empty state when no clients', async () => {
+    vi.mocked(clientManagementApi.list).mockResolvedValueOnce({ data: { clients: [], total: '0' } })
+
     const wrapper = mount(ClientManagementView)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Active')
-    expect(wrapper.text()).toContain('Inactive')
+    expect(wrapper.text()).toContain('Nema pronađenih klijenata')
   })
 })

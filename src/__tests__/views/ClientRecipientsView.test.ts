@@ -54,7 +54,7 @@ describe('ClientRecipientsView', () => {
   it('shows recipient rows in table', async () => {
     const wrapper = mount(ClientRecipientsView)
     await flushPromises()
-    const rows = wrapper.findAll('.recipient-row')
+    const rows = wrapper.findAll('.rcp-card')
     expect(rows).toHaveLength(2)
     expect(wrapper.text()).toContain('Ana Jović')
     expect(wrapper.text()).toContain('111111111111111111')
@@ -72,9 +72,9 @@ describe('ClientRecipientsView', () => {
     const wrapper = mount(ClientRecipientsView)
     await flushPromises()
 
-    expect(wrapper.find('.modal-overlay').exists()).toBe(false)
+    expect(wrapper.find('.rcp-overlay').exists()).toBe(false)
     await wrapper.findAll('button').find(b => b.text().includes('Dodaj'))!.trigger('click')
-    expect(wrapper.find('.modal-overlay').exists()).toBe(true)
+    expect(wrapper.find('.rcp-overlay').exists()).toBe(true)
     expect(wrapper.text()).toContain('Novi primalac')
   })
 
@@ -83,10 +83,10 @@ describe('ClientRecipientsView', () => {
     await flushPromises()
 
     await wrapper.findAll('button').find(b => b.text().includes('Dodaj'))!.trigger('click')
-    expect(wrapper.find('.modal-overlay').exists()).toBe(true)
+    expect(wrapper.find('.rcp-overlay').exists()).toBe(true)
 
-    await wrapper.find('.modal-close').trigger('click')
-    expect(wrapper.find('.modal-overlay').exists()).toBe(false)
+    await wrapper.find('.rcp-modal-close').trigger('click')
+    expect(wrapper.find('.rcp-overlay').exists()).toBe(false)
   })
 
   it('save with empty fields shows validation error', async () => {
@@ -94,7 +94,7 @@ describe('ClientRecipientsView', () => {
     await flushPromises()
 
     await wrapper.findAll('button').find(b => b.text().includes('Dodaj'))!.trigger('click')
-    await wrapper.findAll('button').find(b => b.text() === 'Sačuvaj')!.trigger('click')
+    await wrapper.findAll('button').find(b => b.text() === 'Potvrdi')!.trigger('click')
 
     expect(wrapper.text()).toContain('obavezni')
     expect(recipientApi.create).not.toHaveBeenCalled()
@@ -110,15 +110,15 @@ describe('ClientRecipientsView', () => {
 
     await wrapper.findAll('button').find(b => b.text().includes('Dodaj'))!.trigger('click')
 
-    const inputs = wrapper.findAll('.modal-box input')
+    const inputs = wrapper.findAll('.rcp-modal input')
     await inputs[0].setValue('Novi')
     await inputs[1].setValue('333333333333333333')
 
-    await wrapper.findAll('button').find(b => b.text() === 'Sačuvaj')!.trigger('click')
+    await wrapper.findAll('button').find(b => b.text() === 'Potvrdi')!.trigger('click')
     await flushPromises()
 
     expect(recipientApi.create).toHaveBeenCalledWith('5', 'Novi', '333333333333333333')
-    expect(wrapper.find('.modal-overlay').exists()).toBe(false)
+    expect(wrapper.find('.rcp-overlay').exists()).toBe(false)
   })
 
   it('clicking Izmeni opens modal pre-filled with recipient data', async () => {
@@ -129,7 +129,7 @@ describe('ClientRecipientsView', () => {
     await editBtns[0].trigger('click')
 
     expect(wrapper.text()).toContain('Izmeni primaoca')
-    const inputs = wrapper.findAll('.modal-box input')
+    const inputs = wrapper.findAll('.rcp-modal input')
     expect((inputs[0].element as HTMLInputElement).value).toBe('Ana Jović')
     expect((inputs[1].element as HTMLInputElement).value).toBe('111111111111111111')
   })
@@ -145,14 +145,14 @@ describe('ClientRecipientsView', () => {
     const editBtns = wrapper.findAll('button').filter(b => b.text() === 'Izmeni')
     await editBtns[0].trigger('click')
 
-    const inputs = wrapper.findAll('.modal-box input')
+    const inputs = wrapper.findAll('.rcp-modal input')
     await inputs[0].setValue('Ana Izmenjeno')
 
-    await wrapper.findAll('button').find(b => b.text() === 'Sačuvaj')!.trigger('click')
+    await wrapper.findAll('button').find(b => b.text() === 'Potvrdi')!.trigger('click')
     await flushPromises()
 
     expect(recipientApi.update).toHaveBeenCalledWith('1', 'Ana Izmenjeno', '111111111111111111')
-    expect(wrapper.find('.modal-overlay').exists()).toBe(false)
+    expect(wrapper.find('.rcp-overlay').exists()).toBe(false)
   })
 
   it('clicking Obriši opens delete confirmation', async () => {
@@ -162,8 +162,8 @@ describe('ClientRecipientsView', () => {
     const deleteBtns = wrapper.findAll('button').filter(b => b.text() === 'Obriši')
     await deleteBtns[0].trigger('click')
 
-    expect(wrapper.text()).toContain('Potvrda brisanja')
-    expect(wrapper.text()).toContain('sigurni')
+    expect(wrapper.text()).toContain('Obriši primaoca')
+    expect(wrapper.text()).toContain('ne može poništiti')
   })
 
   it('confirming delete calls delete API', async () => {
@@ -177,7 +177,7 @@ describe('ClientRecipientsView', () => {
 
     // The confirm modal's Obriši button does not have btn-sm (unlike row buttons)
     const confirmBtn = wrapper.findAll('button').find(
-      b => b.classes('btn-danger') && !b.classes('btn-sm') && b.text() === 'Obriši'
+      b => b.classes('rcp-btn-danger') && b.text().includes('Obriši')
     )
     await confirmBtn!.trigger('click')
     await flushPromises()

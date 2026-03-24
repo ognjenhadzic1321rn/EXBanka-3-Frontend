@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import AccountPortalView from '../../views/AccountPortalView.vue'
-import { useAccountStore } from '../../stores/account'
 
 const mockPush = vi.fn()
 
@@ -26,7 +25,28 @@ vi.mock('../../api/account', () => ({
   ],
 }))
 
+vi.mock('../../api/clientManagement', () => ({
+  clientManagementApi: {
+    list: vi.fn().mockResolvedValue({ data: { clients: [], total: '0' } }),
+    get: vi.fn(),
+    update: vi.fn(),
+    updatePermissions: vi.fn(),
+  },
+}))
+
+vi.mock('../../api/card', () => ({
+  employeeCardApi: {
+    listByAccount: vi.fn().mockResolvedValue({ data: [] }),
+    blockCard: vi.fn(),
+    unblockCard: vi.fn(),
+    deactivateCard: vi.fn(),
+  },
+  maskCardNumber: (n: string) => n,
+  CARD_TYPE_LABELS: {} as Record<string, string>,
+}))
+
 import { accountApi } from '../../api/account'
+import { employeeCardApi } from '../../api/card'
 
 const mockAccounts = [
   {
@@ -50,6 +70,7 @@ describe('AccountPortalView', () => {
     vi.mocked(accountApi.listAll).mockResolvedValue({
       data: { accounts: mockAccounts, total: '2' },
     })
+    vi.mocked(employeeCardApi.listByAccount).mockResolvedValue({ data: [] })
   })
 
   it('renders table with account column headers', async () => {
@@ -57,10 +78,9 @@ describe('AccountPortalView', () => {
     await flushPromises()
 
     expect(wrapper.find('table').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Account Number')
-    expect(wrapper.text()).toContain('Currency')
-    expect(wrapper.text()).toContain('Balance')
-    expect(wrapper.text()).toContain('Status')
+    expect(wrapper.text()).toContain('Broj računa')
+    expect(wrapper.text()).toContain('Vrsta')
+    expect(wrapper.text()).toContain('Tip')
   })
 
   it('renders account rows after fetch', async () => {
@@ -69,8 +89,9 @@ describe('AccountPortalView', () => {
 
     expect(wrapper.text()).toContain('111111111111111111')
     expect(wrapper.text()).toContain('222222222222222222')
-    expect(wrapper.text()).toContain('EUR')
-    expect(wrapper.text()).toContain('RSD')
+    // Vrsta labels: Lični, Poslovni
+    expect(wrapper.text()).toContain('Lični')
+    expect(wrapper.text()).toContain('Poslovni')
   })
 
   it('calls fetchAllAccounts on mount', async () => {
@@ -80,52 +101,47 @@ describe('AccountPortalView', () => {
     expect(accountApi.listAll).toHaveBeenCalledTimes(1)
   })
 
-  it('renders filter dropdowns for tip, vrsta, status, currency', async () => {
+  it('renders filter inputs for name and account number', async () => {
     const wrapper = mount(AccountPortalView)
     await flushPromises()
 
-    const selects = wrapper.findAll('select')
-    expect(selects.length).toBeGreaterThanOrEqual(4)
+    const inputs = wrapper.findAll('input')
+    expect(inputs.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('renders Create Account button that navigates to /accounts/new', async () => {
+  it('renders Novi račun button that navigates to /accounts/new', async () => {
     const wrapper = mount(AccountPortalView)
     await flushPromises()
 
-    const btn = wrapper.findAll('button').find(b => b.text().includes('Create Account'))
+    const btn = wrapper.findAll('button').find(b => b.text().includes('Novi račun'))
     await btn!.trigger('click')
 
     expect(mockPush).toHaveBeenCalledWith('/accounts/new')
   })
 
-  it('shows status badges for aktivan and blokiran', async () => {
+  it('shows Tip labels in table rows (Tekući / Devizni)', async () => {
     const wrapper = mount(AccountPortalView)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('aktivan')
-    expect(wrapper.text()).toContain('blokiran')
+    expect(wrapper.text()).toContain('Tekući')
+    expect(wrapper.text()).toContain('Devizni')
   })
 
-  it('opens detail modal when a row is clicked', async () => {
-    vi.mocked(accountApi.get).mockResolvedValueOnce({
-      data: { account: mockAccounts[0] },
-    })
-
+  it('opens cards panel when a row is clicked', async () => {
     const wrapper = mount(AccountPortalView)
     await flushPromises()
 
+    expect(wrapper.find('.panel-overlay').exists()).toBe(false)
     const rows = wrapper.findAll('tbody tr')
     await rows[0].trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('.modal-overlay').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Account Details')
+    expect(wrapper.find('.panel-overlay').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Kartice računa')
   })
 
-  it('detail modal shows account fields', async () => {
-    vi.mocked(accountApi.get).mockResolvedValueOnce({
-      data: { account: mockAccounts[0] },
-    })
+  it('shows no-cards message when account has no cards', async () => {
+    vi.mocked(employeeCardApi.listByAccount).mockResolvedValueOnce({ data: [] })
 
     const wrapper = mount(AccountPortalView)
     await flushPromises()
@@ -133,25 +149,19 @@ describe('AccountPortalView', () => {
     await wrapper.findAll('tbody tr')[0].trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('111111111111111111')
-    expect(wrapper.text()).toContain('EUR')
-    expect(wrapper.text()).toContain('100.000')
+    expect(wrapper.text()).toContain('Ovaj račun nema kartica')
   })
 
-  it('closes detail modal when close button clicked', async () => {
-    vi.mocked(accountApi.get).mockResolvedValueOnce({
-      data: { account: mockAccounts[0] },
-    })
-
+  it('closes panel when close button clicked', async () => {
     const wrapper = mount(AccountPortalView)
     await flushPromises()
 
     await wrapper.findAll('tbody tr')[0].trigger('click')
     await flushPromises()
-    expect(wrapper.find('.modal-overlay').exists()).toBe(true)
+    expect(wrapper.find('.panel-overlay').exists()).toBe(true)
 
-    await wrapper.find('.modal-close').trigger('click')
-    expect(wrapper.find('.modal-overlay').exists()).toBe(false)
+    await wrapper.find('.panel-close').trigger('click')
+    expect(wrapper.find('.panel-overlay').exists()).toBe(false)
   })
 
   it('shows empty state when no accounts', async () => {
@@ -162,6 +172,6 @@ describe('AccountPortalView', () => {
     const wrapper = mount(AccountPortalView)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('No accounts found')
+    expect(wrapper.text()).toContain('Nema pronađenih računa')
   })
 })

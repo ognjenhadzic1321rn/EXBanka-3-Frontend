@@ -37,10 +37,10 @@ describe('CreateAccountView', () => {
   it('renders the form with all required sections', () => {
     const wrapper = mount(CreateAccountView)
 
-    expect(wrapper.text()).toContain('Create Account')
-    expect(wrapper.text()).toContain('Currency')
-    expect(wrapper.text()).toContain('Account Type')
-    expect(wrapper.text()).toContain('Account Kind')
+    expect(wrapper.text()).toContain('Kreiranje računa')
+    expect(wrapper.text()).toContain('Valuta')
+    expect(wrapper.text()).toContain('Tip računa')
+    expect(wrapper.text()).toContain('Vrsta')
   })
 
   it('renders currency dropdown with options', () => {
@@ -74,13 +74,13 @@ describe('CreateAccountView', () => {
     await poslovniRadio!.setValue('poslovni')
     await poslovniRadio!.trigger('change')
 
-    expect(wrapper.text()).toContain('Firma ID')
-    expect(wrapper.find('input[type="number"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Naziv firme')
+    expect(wrapper.find('input[placeholder="npr. Firma DOO"]').exists()).toBe(true)
   })
 
-  it('does not show firma ID input when licni is selected', () => {
+  it('does not show firma form when licni is selected', () => {
     const wrapper = mount(CreateAccountView)
-    expect(wrapper.find('input[type="number"]').exists()).toBe(false)
+    expect(wrapper.find('input[placeholder="npr. Firma DOO"]').exists()).toBe(false)
   })
 
   it('renders disabled card checkbox (Sprint 2 guardrail)', () => {
@@ -97,7 +97,7 @@ describe('CreateAccountView', () => {
     await wrapper.find('button[class*="btn-primary"]').trigger('click')
     await flushPromises()
 
-    expect(store.error).toContain('client')
+    expect(store.error).toContain('klijenta')
   })
 
   it('opens ClientSelectDialog when Select Client button clicked', async () => {

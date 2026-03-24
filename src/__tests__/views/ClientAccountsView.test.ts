@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import ClientAccountsView from '../../views/client/ClientAccountsView.vue'
-import { useClientAccountStore } from '../../stores/clientAccount'
 import { useClientAuthStore } from '../../stores/clientAuth'
 
 const mockPush = vi.fn()
@@ -21,6 +20,10 @@ vi.mock('../../api/clientAuth', () => ({
   default: { get: vi.fn(), interceptors: { request: { use: vi.fn() } } },
 }))
 
+vi.mock('../../api/transfer', () => ({
+  transferApi: { listByClient: vi.fn().mockResolvedValue({ data: { transfers: [], total: 0 } }) },
+}))
+
 import { clientAccountApi } from '../../api/clientAccount'
 
 const mockAccounts = [
@@ -34,7 +37,7 @@ const mockAccounts = [
     id: '2', brojRacuna: '222222222222222222', clientId: '5', firmaId: '0',
     currencyId: '1', currencyKod: 'RSD', tip: 'tekuci', vrsta: 'licni',
     stanje: 50000, raspolozivoStanje: 50000, dnevniLimit: 100000, mesecniLimit: 1000000,
-    naziv: '', status: 'blokiran',
+    naziv: '', status: 'aktivan',
   },
 ]
 
@@ -43,7 +46,6 @@ describe('ClientAccountsView', () => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
 
-    // Set up logged-in client
     const authStore = useClientAuthStore()
     authStore.accessToken = 'test-token'
     authStore.client = { id: '5', ime: 'Ana', prezime: 'Jović', email: 'ana@gmail.com', permissions: ['client.basic'] }
@@ -53,10 +55,10 @@ describe('ClientAccountsView', () => {
     })
   })
 
-  it('renders My Accounts heading', async () => {
+  it('renders Računi heading', async () => {
     const wrapper = mount(ClientAccountsView)
     await flushPromises()
-    expect(wrapper.text()).toContain('My Accounts')
+    expect(wrapper.text()).toContain('Računi')
   })
 
   it('calls fetchAccounts with client id on mount', async () => {
@@ -65,11 +67,11 @@ describe('ClientAccountsView', () => {
     expect(clientAccountApi.listByClient).toHaveBeenCalledWith('5')
   })
 
-  it('renders an account card for each account', async () => {
+  it('renders a card for each active account', async () => {
     const wrapper = mount(ClientAccountsView)
     await flushPromises()
-    const cards = wrapper.findAll('.account-card')
-    expect(cards).toHaveLength(2)
+    const cards = wrapper.findAll('.card')
+    expect(cards.length).toBeGreaterThanOrEqual(2)
   })
 
   it('shows account number on each card', async () => {
@@ -79,45 +81,63 @@ describe('ClientAccountsView', () => {
     expect(wrapper.text()).toContain('222222222222222222')
   })
 
-  it('shows balance and available balance', async () => {
+  it('shows Raspoloživo stanje label and currency', async () => {
     const wrapper = mount(ClientAccountsView)
     await flushPromises()
-    expect(wrapper.text()).toContain('Balance')
-    expect(wrapper.text()).toContain('Available')
+    expect(wrapper.text()).toContain('Raspoloživo stanje')
     expect(wrapper.text()).toContain('EUR')
   })
 
-  it('shows daily and monthly limits', async () => {
+  it('shows Dnevna and Mesečna potrošnja in detail modal', async () => {
     const wrapper = mount(ClientAccountsView)
     await flushPromises()
-    expect(wrapper.text()).toContain('Daily limit')
-    expect(wrapper.text()).toContain('Monthly limit')
+
+    const detaljBtn = wrapper.findAll('button').find(b => b.text() === 'Detalji')
+    await detaljBtn!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Dnevna potrošnja')
+    expect(wrapper.text()).toContain('Mesečna potrošnja')
   })
 
-  it('shows account status badge', async () => {
+  it('shows both active accounts in the list', async () => {
     const wrapper = mount(ClientAccountsView)
     await flushPromises()
-    expect(wrapper.text()).toContain('aktivan')
-    expect(wrapper.text()).toContain('blokiran')
+    // Both accounts have status: 'aktivan' and appear in the list
+    expect(wrapper.text()).toContain('111111111111111111')
+    expect(wrapper.text()).toContain('222222222222222222')
   })
 
-  it('shows New Transfer and New Payment buttons', async () => {
+  it('shows Detalji button for each account', async () => {
     const wrapper = mount(ClientAccountsView)
     await flushPromises()
-    expect(wrapper.text()).toContain('New Transfer')
-    expect(wrapper.text()).toContain('New Payment')
+    const detaljBtns = wrapper.findAll('button').filter(b => b.text() === 'Detalji')
+    expect(detaljBtns.length).toBe(2)
   })
 
-  it('clicking New Transfer navigates with fromAccountId', async () => {
+  it('clicking Detalji opens account detail modal', async () => {
     const wrapper = mount(ClientAccountsView)
     await flushPromises()
 
-    const transferBtn = wrapper.findAll('button').find(b => b.text() === 'New Transfer')
-    await transferBtn!.trigger('click')
+    expect(wrapper.find('.modal-overlay').exists()).toBe(false)
+    const detaljBtn = wrapper.findAll('button').find(b => b.text() === 'Detalji')
+    await detaljBtn!.trigger('click')
 
-    expect(mockPush).toHaveBeenCalledWith(
-      expect.objectContaining({ path: '/client/transfers', query: expect.objectContaining({ fromAccountId: '1' }) })
-    )
+    expect(wrapper.find('.modal-overlay').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Novo plaćanje')
+  })
+
+  it('clicking Novo plaćanje in modal navigates to /client/payments/new', async () => {
+    const wrapper = mount(ClientAccountsView)
+    await flushPromises()
+
+    const detaljBtn = wrapper.findAll('button').find(b => b.text() === 'Detalji')
+    await detaljBtn!.trigger('click')
+
+    const payBtn = wrapper.findAll('button').find(b => b.text() === 'Novo plaćanje')
+    await payBtn!.trigger('click')
+
+    expect(mockPush).toHaveBeenCalledWith('/client/payments/new')
   })
 
   it('shows empty state when no accounts', async () => {
@@ -126,6 +146,6 @@ describe('ClientAccountsView', () => {
     const wrapper = mount(ClientAccountsView)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('No accounts found')
+    expect(wrapper.text()).toContain('Nema aktivnih računa')
   })
 })

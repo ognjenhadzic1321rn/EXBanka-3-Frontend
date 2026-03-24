@@ -79,7 +79,7 @@ describe('ClientSelectDialog', () => {
     await resultRow.trigger('click')
 
     expect(wrapper.emitted('selected')).toBeTruthy()
-    expect(wrapper.emitted('selected')![0]).toEqual(['1'])
+    expect(wrapper.emitted('selected')![0]).toEqual(['1', 'Ana Jović'])
   })
 
   it('shows no-results message when search returns empty', async () => {
@@ -123,7 +123,7 @@ describe('ClientSelectDialog', () => {
 
     expect(clientManagementApi.create).toHaveBeenCalled()
     expect(wrapper.emitted('selected')).toBeTruthy()
-    expect(wrapper.emitted('selected')![0]).toEqual(['99'])
+    expect(wrapper.emitted('selected')![0]).toEqual(['99', 'Nova Osoba'])
   })
 
   it('close button emits close event', async () => {
