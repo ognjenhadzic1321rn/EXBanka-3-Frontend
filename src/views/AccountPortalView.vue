@@ -9,15 +9,15 @@ const router = useRouter()
 const store = useAccountStore()
 
 // Client name lookup
-const clientMap = ref<Record<string, { ime: string; prezime: string }>>({})
+const clientMap = ref<Record<string, { ime: string; prezime: string; email: string }>>({})
 
 async function loadClientNames() {
   try {
     const res = await clientManagementApi.list({ page: 1, pageSize: 1000 })
     const clients = res.data.clients ?? []
-    const map: Record<string, { ime: string; prezime: string }> = {}
+    const map: Record<string, { ime: string; prezime: string; email: string }> = {}
     for (const c of clients) {
-      map[c.id] = { ime: c.ime, prezime: c.prezime }
+      map[c.id] = { ime: c.ime, prezime: c.prezime, email: c.email }
     }
     clientMap.value = map
   } catch { /* ignore */ }
@@ -26,6 +26,16 @@ async function loadClientNames() {
 function clientName(clientId: string): string {
   const c = clientMap.value[clientId]
   return c ? `${c.prezime} ${c.ime}` : '—'
+}
+
+function clientEmail(clientId: number): string {
+  const c = clientMap.value[String(clientId)]
+  return c ? c.email : '—'
+}
+
+function cardOwnerName(clientId: number): string {
+  const c = clientMap.value[String(clientId)]
+  return c ? `${c.ime} ${c.prezime}` : '—'
 }
 
 // Filters
@@ -248,6 +258,10 @@ onMounted(async () => {
           <div v-for="card in cards" :key="card.id" class="card-row">
             <div class="card-row-info">
               <div class="card-row-number">{{ maskCardNumber(card.broj_kartice) }}</div>
+              <div class="card-row-owner">
+                <span class="card-owner-name">{{ cardOwnerName(card.client_id) }}</span>
+                <span class="card-owner-email">{{ clientEmail(card.client_id) }}</span>
+              </div>
               <div class="card-row-meta">
                 {{ vrstaKarticaLabel(card.vrsta_kartice) }}
                 <span v-if="card.naziv_kartice"> · {{ card.naziv_kartice }}</span>
@@ -329,6 +343,9 @@ onMounted(async () => {
   font-family: 'SF Mono', monospace; font-size: 15px;
   font-weight: 600; color: #0f172a; margin-bottom: 6px; letter-spacing: 1px;
 }
+.card-row-owner { margin-bottom: 6px; }
+.card-owner-name { font-size: 13px; font-weight: 600; color: #1e293b; margin-right: 8px; }
+.card-owner-email { font-size: 12px; color: #64748b; }
 .card-row-meta { font-size: 12px; color: #64748b; margin-bottom: 10px; }
 .card-badge {
   display: inline-block; padding: 2px 9px; border-radius: 20px;

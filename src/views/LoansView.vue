@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { employeeLoanApi, type Loan } from '../api/employeeLoan'
-import { LOAN_TYPES, LOAN_STATUS_LABELS } from '../api/loan'
+import { LOAN_TYPES, LOAN_STATUS_LABELS, loanApi, type LoanInstallment } from '../api/loan'
 
 const loans = ref<Loan[]>([])
 const loading = ref(false)
@@ -11,6 +11,9 @@ const filterVrsta = ref('')
 const filterBrojRacuna = ref('')
 const filterStatus = ref('')
 
+// For installment-based remaining debt calculation
+const installmentsCache = ref<Record<number, LoanInstallment[]>>({})
+
 const STATUSES = [
   { value: 'zahtev',   label: 'Zahtev' },
   { value: 'odobren',  label: 'Odobren' },
@@ -18,6 +21,11 @@ const STATUSES = [
   { value: 'aktivan',  label: 'Aktivan' },
   { value: 'zatvoren', label: 'Zatvoren' },
 ]
+
+// Sorted by broj_racuna as per spec
+const sortedLoans = computed(() =>
+  [...loans.value].sort((a, b) => a.broj_racuna.localeCompare(b.broj_racuna))
+)
 
 async function load() {
   loading.value = true
@@ -29,6 +37,19 @@ async function load() {
       status: filterStatus.value,
     })
     loans.value = res.data ?? []
+    // Load installments for active loans to compute remaining debt
+    installmentsCache.value = {}
+    const activeLoans = loans.value.filter(l => l.status === 'aktivan' || l.status === 'odobren')
+    await Promise.all(
+      activeLoans.map(async (loan) => {
+        try {
+          const res = await loanApi.listInstallments(loan.id)
+          installmentsCache.value[loan.id] = res.data ?? []
+        } catch {
+          installmentsCache.value[loan.id] = []
+        }
+      })
+    )
   } catch (e: any) {
     error.value = e.response?.data?.error || 'Greška pri učitavanju kredita.'
   } finally {
@@ -41,6 +62,15 @@ function clearFilters() {
   filterBrojRacuna.value = ''
   filterStatus.value = ''
   load()
+}
+
+function remainingDebt(loan: Loan): string {
+  const installments = installmentsCache.value[loan.id]
+  if (!installments || installments.length === 0) return '—'
+  const debt = installments
+    .filter(i => i.status === 'ocekuje' || i.status === 'kasni')
+    .reduce((sum, i) => sum + i.iznos, 0)
+  return fmtMoney(debt)
 }
 
 function vrstaLabel(v: string) {
@@ -59,6 +89,7 @@ function statusBadgeClass(s: string) {
 }
 
 function fmtMoney(n: number) {
+  if (n == null) return '—'
   return n.toLocaleString('sr-RS', { minimumFractionDigits: 2 })
 }
 
@@ -102,36 +133,34 @@ onMounted(load)
       <table>
         <thead>
           <tr>
-            <th>Broj kredita</th>
             <th>Vrsta</th>
-            <th>Status</th>
-            <th>Iznos</th>
+            <th>Tip kamate</th>
+            <th>Datum ugovaranja</th>
             <th>Period</th>
-            <th>Kamatna stopa</th>
-            <th>Rata</th>
-            <th>Račun</th>
-            <th>Datum kreiranja</th>
-            <th>Datum dospeća</th>
+            <th>Broj računa</th>
+            <th>Iznos</th>
+            <th>Preostalo dugovanje</th>
+            <th>Valuta</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="loading">
-            <td colspan="10" style="text-align:center;padding:24px;color:#6b7280">Učitavam...</td>
+            <td colspan="9" style="text-align:center;padding:24px;color:#6b7280">Učitavam...</td>
           </tr>
-          <tr v-else-if="loans.length === 0">
-            <td colspan="10" style="text-align:center;padding:24px;color:#6b7280">Nema kredita koji odgovaraju filterima.</td>
+          <tr v-else-if="sortedLoans.length === 0">
+            <td colspan="9" style="text-align:center;padding:24px;color:#6b7280">Nema kredita koji odgovaraju filterima.</td>
           </tr>
-          <tr v-for="loan in loans" :key="loan.id">
-            <td><code style="font-size:12px">{{ loan.broj_kredita }}</code></td>
+          <tr v-for="loan in sortedLoans" :key="loan.id">
             <td>{{ vrstaLabel(loan.vrsta) }}</td>
-            <td><span :class="statusBadgeClass(loan.status)">{{ LOAN_STATUS_LABELS[loan.status] ?? loan.status }}</span></td>
-            <td style="font-weight:600">{{ fmtMoney(loan.iznos) }} RSD</td>
-            <td>{{ loan.period }} mes.</td>
-            <td>{{ loan.kamatna_stopa?.toFixed(2) }}% ({{ loan.tip_kamate }})</td>
-            <td>{{ fmtMoney(loan.iznos_rate) }} RSD</td>
-            <td><code style="font-size:12px">{{ loan.broj_racuna }}</code></td>
+            <td>{{ loan.tip_kamate === 'fiksna' ? 'Fiksna' : 'Varijabilna' }}</td>
             <td>{{ fmtDate(loan.datum_kreiranja) }}</td>
-            <td>{{ fmtDate(loan.datum_dospeca) }}</td>
+            <td>{{ loan.period }} mes.</td>
+            <td><code style="font-size:12px">{{ loan.broj_racuna }}</code></td>
+            <td style="font-weight:600">{{ fmtMoney(loan.iznos) }}</td>
+            <td>{{ remainingDebt(loan) }}</td>
+            <td>RSD</td>
+            <td><span :class="statusBadgeClass(loan.status)">{{ LOAN_STATUS_LABELS[loan.status] ?? loan.status }}</span></td>
           </tr>
         </tbody>
       </table>

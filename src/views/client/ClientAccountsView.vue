@@ -60,6 +60,18 @@ async function handleRename() {
     renameError.value = 'Naziv ne može biti prazan.'
     return
   }
+  const newName = renameValue.value.trim()
+  if (newName === (detailsAccount.value.naziv || '').trim()) {
+    renameError.value = 'Novi naziv je isti kao trenutni.'
+    return
+  }
+  const duplicate = store.accounts.find(
+    a => a.id !== detailsAccount.value!.id && (a.naziv || '').trim().toLowerCase() === newName.toLowerCase()
+  )
+  if (duplicate) {
+    renameError.value = 'Već imate račun sa tim nazivom.'
+    return
+  }
   renameLoading.value = true
   renameError.value = ''
   try {

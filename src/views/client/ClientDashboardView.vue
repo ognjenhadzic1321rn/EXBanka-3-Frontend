@@ -19,9 +19,20 @@ const clientId = computed(() => String(clientAuthStore.client?.id ?? ''))
 const rates = ref<ExchangeRate[]>([])
 const loadingRates = ref(false)
 
+// Per-account transaction selector (spec: "po odabranom racunu")
+const selectedAccountId = ref('')
+
 const recentActivity = computed(() => {
+  const accId = selectedAccountId.value
+  const transfers = accId
+    ? transferStore.transfers.filter(t => String(t.racunPosiljaocaId) === accId || String(t.racunPrimaocaId) === accId)
+    : transferStore.transfers
+  const payments = accId
+    ? paymentStore.payments.filter(p => String(p.racunPosiljaocaId) === accId)
+    : paymentStore.payments
+
   const items = [
-    ...transferStore.transfers.map(t => ({
+    ...transfers.map(t => ({
       type: 'transfer' as const,
       id: t.id,
       date: t.vremeTransakcije,
@@ -30,7 +41,7 @@ const recentActivity = computed(() => {
       description: t.svrha || 'Transfer',
       status: t.status,
     })),
-    ...paymentStore.payments.map(p => ({
+    ...payments.map(p => ({
       type: 'payment' as const,
       id: p.id,
       date: p.vremeTransakcije,
@@ -183,9 +194,17 @@ onMounted(async () => {
       <div class="section">
         <div class="section-header">
           <h2>Poslednje transakcije</h2>
-          <RouterLink to="/client/transfers" class="section-link">Sve →</RouterLink>
+          <div class="section-header-right">
+            <select v-model="selectedAccountId" class="account-selector">
+              <option value="">Svi računi</option>
+              <option v-for="acc in accountStore.accounts" :key="acc.id" :value="String(acc.id)">
+                {{ acc.naziv || acc.brojRacuna }} ({{ acc.currencyKod }})
+              </option>
+            </select>
+            <RouterLink to="/client/transfers" class="section-link">Sve →</RouterLink>
+          </div>
         </div>
-        <div v-if="recentActivity.length === 0" class="empty-state">Nema transakcija.</div>
+        <div v-if="recentActivity.length === 0" class="empty-state">Nema transakcija{{ selectedAccountId ? ' za ovaj račun' : '' }}.</div>
         <div v-else class="activity-list">
           <div v-for="item in recentActivity" :key="item.id + item.type" class="activity-item">
             <div class="activity-icon" :class="item.type === 'transfer' ? 'icon-transfer' : 'icon-payment'">
@@ -394,6 +413,12 @@ onMounted(async () => {
   text-decoration: none;
 }
 .section-link:hover { text-decoration: underline; }
+.section-header-right { display: flex; align-items: center; gap: 12px; }
+.account-selector {
+  padding: 5px 10px; border: 1px solid #d1d5db; border-radius: 6px;
+  font-size: 12px; color: #374151; background: #f9fafb; outline: none;
+}
+.account-selector:focus { border-color: #3b82f6; }
 
 /* Two column */
 .two-col {

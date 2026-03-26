@@ -3,17 +3,57 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLoanStore } from '../../stores/loan'
 import { useClientAuthStore } from '../../stores/clientAuth'
+import { useClientAccountStore } from '../../stores/clientAccount'
 import { loanApi, LOAN_STATUS_LABELS, type Loan, type LoanInstallment } from '../../api/loan'
 
 const router = useRouter()
 const clientAuth = useClientAuthStore()
 const loanStore = useLoanStore()
+const accountStore = useClientAccountStore()
 
 const clientId = computed(() => clientAuth.client?.id ?? '')
 
 const selectedLoan = ref<Loan | null>(null)
 const selectedInstallments = ref<LoanInstallment[]>([])
 const installmentsLoading = ref(false)
+
+// Computed: remaining debt = sum of unpaid installments
+const remainingDebt = computed(() => {
+  return selectedInstallments.value
+    .filter(i => i.status === 'ocekuje' || i.status === 'kasni')
+    .reduce((sum, i) => sum + i.iznos, 0)
+})
+
+// Computed: next installment (earliest unpaid)
+const nextInstallment = computed(() => {
+  const unpaid = selectedInstallments.value
+    .filter(i => i.status === 'ocekuje')
+    .sort((a, b) => new Date(a.datum_dospeca).getTime() - new Date(b.datum_dospeca).getTime())
+  return unpaid.length > 0 ? unpaid[0] : null
+})
+
+// Computed: effective interest rate (current rate from latest installment snapshot)
+const effectiveRate = computed(() => {
+  const loan = selectedLoan.value
+  if (!loan) return null
+  if (loan.tip_kamate === 'fiksna') return loan.kamatna_stopa
+  // For variable rate, use the latest installment's snapshot
+  const unpaid = selectedInstallments.value
+    .filter(i => i.status === 'ocekuje')
+    .sort((a, b) => new Date(a.datum_dospeca).getTime() - new Date(b.datum_dospeca).getTime())
+  const first = unpaid[0]
+  if (first) return first.kamata_stopa_snapshot
+  // fallback to loan's rate
+  return loan.kamatna_stopa
+})
+
+// Computed: currency label from account
+const loanCurrency = computed(() => {
+  const loan = selectedLoan.value
+  if (!loan) return 'RSD'
+  const acc = accountStore.accounts.find(a => a.brojRacuna === loan.broj_racuna)
+  return acc?.currencyKod ?? 'RSD'
+})
 
 const sortedLoans = computed(() =>
   [...loanStore.loans].sort((a, b) => b.iznos - a.iznos)
@@ -83,7 +123,10 @@ function fmtMoney(n: number) {
 
 onMounted(async () => {
   if (clientId.value) {
-    await loanStore.fetchByClient(clientId.value)
+    await Promise.all([
+      loanStore.fetchByClient(clientId.value),
+      accountStore.fetchAccounts(String(clientId.value)),
+    ])
   }
 })
 </script>
@@ -128,8 +171,8 @@ onMounted(async () => {
           </div>
         </div>
         <div class="lv-card-right">
-          <div class="lv-card-amount">{{ fmtMoney(loan.iznos) }} RSD</div>
-          <div class="lv-card-rate">Rata: {{ fmtMoney(loan.iznos_rate) }} RSD/mes</div>
+          <div class="lv-card-amount">{{ fmtMoney(loan.iznos) }} {{ accountStore.accounts.find(a => a.brojRacuna === loan.broj_racuna)?.currencyKod ?? 'RSD' }}</div>
+          <div class="lv-card-rate">Rata: {{ fmtMoney(loan.iznos_rate) }} {{ accountStore.accounts.find(a => a.brojRacuna === loan.broj_racuna)?.currencyKod ?? 'RSD' }}/mes</div>
           <span :class="['lv-badge', statusClass(loan.status)]">
             {{ LOAN_STATUS_LABELS[loan.status] ?? loan.status }}
           </span>
@@ -157,32 +200,54 @@ onMounted(async () => {
               <span class="lv-mono">{{ selectedLoan.broj_kredita }}</span>
             </div>
             <div class="lv-detail-item">
-              <span class="lv-detail-label">Iznos</span>
-              <span>{{ fmtMoney(selectedLoan.iznos) }} RSD</span>
+              <span class="lv-detail-label">Vrsta kredita</span>
+              <span>{{ vrstaLabel(selectedLoan.vrsta) }}</span>
             </div>
             <div class="lv-detail-item">
-              <span class="lv-detail-label">Mesečna rata</span>
-              <span class="lv-highlight">{{ fmtMoney(selectedLoan.iznos_rate) }} RSD</span>
+              <span class="lv-detail-label">Ukupni iznos kredita</span>
+              <span>{{ fmtMoney(selectedLoan.iznos) }} {{ loanCurrency }}</span>
             </div>
             <div class="lv-detail-item">
-              <span class="lv-detail-label">Period</span>
+              <span class="lv-detail-label">Period otplate</span>
               <span>{{ selectedLoan.period }} meseci</span>
             </div>
             <div class="lv-detail-item">
-              <span class="lv-detail-label">Kamatna stopa</span>
+              <span class="lv-detail-label">Nominalna kamatna stopa</span>
               <span>{{ selectedLoan.kamatna_stopa?.toFixed(2) }}% ({{ selectedLoan.tip_kamate }})</span>
+            </div>
+            <div class="lv-detail-item">
+              <span class="lv-detail-label">Efektivna kamatna stopa</span>
+              <span>{{ effectiveRate?.toFixed(2) }}%</span>
+            </div>
+            <div class="lv-detail-item">
+              <span class="lv-detail-label">Datum ugovaranja</span>
+              <span>{{ fmtDate(selectedLoan.datum_kreiranja) }}</span>
+            </div>
+            <div class="lv-detail-item">
+              <span class="lv-detail-label">Datum kada kredit treba da bude isplaćen</span>
+              <span>{{ fmtDate(selectedLoan.datum_dospeca) }}</span>
+            </div>
+            <div class="lv-detail-item">
+              <span class="lv-detail-label">Iznos sledeće rate</span>
+              <span class="lv-highlight">
+                {{ nextInstallment ? fmtMoney(nextInstallment.iznos) + ' ' + loanCurrency : '—' }}
+              </span>
+            </div>
+            <div class="lv-detail-item">
+              <span class="lv-detail-label">Datum sledeće rate</span>
+              <span>{{ nextInstallment ? fmtDate(nextInstallment.datum_dospeca) : '—' }}</span>
+            </div>
+            <div class="lv-detail-item">
+              <span class="lv-detail-label">Preostalo dugovanje</span>
+              <span class="lv-highlight">{{ fmtMoney(remainingDebt) }} {{ loanCurrency }}</span>
+            </div>
+            <div class="lv-detail-item">
+              <span class="lv-detail-label">Valuta kredita</span>
+              <span>{{ loanCurrency }}</span>
             </div>
             <div class="lv-detail-item">
               <span class="lv-detail-label">Račun za naplatu</span>
               <span class="lv-mono">{{ selectedLoan.broj_racuna }}</span>
-            </div>
-            <div class="lv-detail-item">
-              <span class="lv-detail-label">Datum kreiranja</span>
-              <span>{{ fmtDate(selectedLoan.datum_kreiranja) }}</span>
-            </div>
-            <div class="lv-detail-item">
-              <span class="lv-detail-label">Datum dospeća</span>
-              <span>{{ fmtDate(selectedLoan.datum_dospeca) }}</span>
             </div>
           </div>
 

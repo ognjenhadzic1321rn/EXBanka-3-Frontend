@@ -16,6 +16,11 @@ export interface Loan {
   client_id: number
   zaposleni_id: number | null
   currency_id: number
+  svrha_kredita: string
+  iznos_mesecne_plate: number
+  status_zaposlenja: string
+  period_zaposlenja: string
+  kontakt_telefon: string
   created_at: string
 }
 
@@ -38,6 +43,25 @@ export interface CreateLoanPayload {
   tipKamate: string
   clientId: number
   currencyId: number
+  svrhaKredita: string
+  iznosMesecnePlate: number
+  statusZaposlenja: string
+  periodZaposlenja: string
+  kontaktTelefon: string
+}
+
+export const EMPLOYMENT_STATUSES = [
+  { value: 'stalno', label: 'Stalno zaposlenje' },
+  { value: 'privremeno', label: 'Privremeno zaposlenje' },
+  { value: 'nezaposlen', label: 'Nezaposlen' },
+]
+
+export const PERIOD_OPTIONS: Record<string, number[]> = {
+  gotovinski:      [12, 24, 36, 48, 60, 72, 84],
+  auto:            [12, 24, 36, 48, 60, 72, 84],
+  studentski:      [12, 24, 36, 48, 60, 72, 84],
+  refinansirajuci: [12, 24, 36, 48, 60, 72, 84],
+  stambeni:        [60, 120, 180, 240, 300, 360],
 }
 
 export const LOAN_TYPES = [
@@ -101,14 +125,19 @@ export function marginForVrsta(vrsta: string): number {
 export const loanApi = {
   create: (data: CreateLoanPayload) =>
     clientApi.post('/loans/request', {
-      vrsta:        data.vrsta,
-      broj_racuna:  data.brojRacuna,
-      iznos:        data.iznos,
-      period:       data.period,
-      tip_kamate:   data.tipKamate,
-      client_id:    data.clientId,
-      currency_id:  data.currencyId,
-      euribor_rate: 0,
+      vrsta:                data.vrsta,
+      broj_racuna:          data.brojRacuna,
+      iznos:                data.iznos,
+      period:               data.period,
+      tip_kamate:           data.tipKamate,
+      client_id:            data.clientId,
+      currency_id:          data.currencyId,
+      euribor_rate:         0,
+      svrha_kredita:        data.svrhaKredita,
+      iznos_mesecne_plate:  data.iznosMesecnePlate,
+      status_zaposlenja:    data.statusZaposlenja,
+      period_zaposlenja:    data.periodZaposlenja,
+      kontakt_telefon:      data.kontaktTelefon,
     }),
 
   listByClient: (clientId: string | number) =>

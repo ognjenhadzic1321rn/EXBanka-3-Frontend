@@ -220,6 +220,13 @@ async function nextPage() {
 
 const totalPages = computed(() => Math.ceil(transferStore.total / transferStore.pageSize) || 1)
 
+// Sort transfers chronologically, newest first (spec requirement)
+const sortedTransfers = computed(() =>
+  [...transferStore.transfers].sort((a, b) =>
+    new Date(b.vremeTransakcije).getTime() - new Date(a.vremeTransakcije).getTime()
+  )
+)
+
 function statusLabel(s: string) {
   switch (s) {
     case 'uspesno': return 'Uspesno'
@@ -409,9 +416,9 @@ onUnmounted(() => {
         </div>
 
         <div v-if="transferStore.loading" class="tf-empty">Ucitavam...</div>
-        <div v-else-if="transferStore.transfers.length === 0" class="tf-empty">Nema transfera.</div>
+        <div v-else-if="sortedTransfers.length === 0" class="tf-empty">Nema transfera.</div>
         <div v-else class="tf-history">
-          <div v-for="t in transferStore.transfers" :key="t.id" class="tf-history-item">
+          <div v-for="t in sortedTransfers" :key="t.id" class="tf-history-item">
             <div class="tf-history-left">
               <div class="tf-history-desc">{{ t.svrha || 'Transfer' }}</div>
               <div class="tf-history-meta">

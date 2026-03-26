@@ -43,8 +43,18 @@ describe('Client loans', () => {
         cy.contains('h1', 'Zahtev za kredit').should('be.visible')
         cy.contains('.nl-radio-btn', 'Gotovinski').click()
         cy.get('input[placeholder="npr. 500000"]').clear().type('120001')
-        cy.get('input[placeholder="npr. 60"]').clear().type('12')
-        cy.get('select.nl-input').select(testData.account.brojRacuna)
+
+        // Period is now a dropdown (not free input)
+        cy.get('select').filter(':has(option[value="12"])').select('12')
+
+        // Fill required fields
+        cy.get('input[placeholder*="Kupovina"]').clear().type('Test svrha')
+        cy.get('input[placeholder="npr. 120000"]').clear().type('80000')
+        cy.get('select').filter(':has(option[value="stalno"])').select('stalno')
+        cy.get('input[placeholder*="godine"]').clear().type('2 godine')
+        cy.get('input[placeholder*="064"]').clear().type('0641111111')
+
+        cy.get('select.nl-input').last().select(testData.account.brojRacuna)
         cy.contains('button', 'Podnesi zahtev').click()
 
         cy.contains('button', 'Pregled kredita').should('be.visible').click()

@@ -25,6 +25,17 @@ export function maskCardNumber(broj: string): string {
   return `${broj.slice(0, 4)} **** **** ${broj.slice(12)}`
 }
 
+export interface CardRequestResponse {
+  id: number
+  expires_at: string
+  message: string
+}
+
+export interface CardVerifyResponse {
+  card: Card
+  message: string
+}
+
 // Client-facing card API (uses client JWT)
 export const cardApi = {
   listByClient: (clientId: number | string) =>
@@ -32,6 +43,21 @@ export const cardApi = {
 
   blockCard: (cardId: number, clientId: number) =>
     clientApi.put<Card>(`/cards/${cardId}/block`, { clientId }),
+
+  requestCard: (payload: {
+    accountId: number
+    vrstaKartice: string
+    nazivKartice?: string
+    clientEmail: string
+    clientName: string
+    ovlascenoIme?: string
+    ovlascenoPrezime?: string
+    ovlascenoEmail?: string
+    ovlascenoBrojTelefona?: string
+  }) => clientApi.post<CardRequestResponse>('/cards/request', payload),
+
+  verifyCardRequest: (requestId: number, code: string) =>
+    clientApi.post<CardVerifyResponse>(`/cards/request/${requestId}/verify`, { code }),
 }
 
 // Employee-facing card API (uses employee JWT)
