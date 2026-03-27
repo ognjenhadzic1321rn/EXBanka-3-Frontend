@@ -5,11 +5,28 @@ import {
   activateClient,
   loginClientUi,
   createAccount,
-  fetchOtp,
+  API_BASE,
 } from '../helpers/banking'
 
+function clientLogin(email, password = Cypress.env('clientPassword')) {
+  return cy
+    .request('POST', `${API_BASE}/auth/client/login`, { email, password })
+    .its('body.accessToken')
+}
+
+function mobileApprovePayment(clientToken, paymentId) {
+  return cy
+    .request({
+      method: 'POST',
+      url: `${API_BASE}/payments/${paymentId}/approve`,
+      headers: { Authorization: `Bearer ${clientToken}` },
+      body: { mode: 'code' },
+    })
+    .its('body.verificationCode')
+}
+
 describe('New payment flow', () => {
-  it('creates a payment, verifies it, adds a recipient, and shows it in overview', () => {
+  it('creates a payment, verifies via mobile OTP, adds a recipient, and shows it in overview', () => {
     const testData = {
       sender: null,
       receiver: null,
@@ -63,14 +80,25 @@ describe('New payment flow', () => {
         cy.get('input[placeholder="Svrha plaćanja"]').clear().type(testData.purpose)
         cy.get('.pay-field select').last().select(String(testData.senderAccount.id))
 
+        // Intercept payment create to get payment ID
+        cy.intercept('POST', `${API_BASE}/payments`).as('createPayment')
+
         cy.contains('button', 'Nastavi').click()
         cy.contains('Pregled naloga').should('be.visible')
         cy.contains(testData.receiverAccount.brojRacuna).should('be.visible')
         cy.contains('button', 'Potvrdi').click()
 
-        fetchOtp(testData.sender.email, testData.purpose).then((otp) => {
-          cy.get('.pay-code-input').clear().type(otp)
-          cy.contains('button', 'Potvrdi kod').click()
+        // Get payment ID from response, simulate mobile approve to get OTP
+        cy.wait('@createPayment').then((interception) => {
+          const paymentId = interception.response.body?.payment?.id
+          expect(paymentId, 'payment ID').to.exist
+
+          clientLogin(testData.sender.email).then((clientToken) => {
+            mobileApprovePayment(clientToken, paymentId).then((code) => {
+              cy.get('.pay-code-input').clear().type(code)
+              cy.contains('button', 'Potvrdi kod').click()
+            })
+          })
         })
 
         cy.contains('Plaćanje uspešno!').should('be.visible')

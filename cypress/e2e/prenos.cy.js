@@ -89,28 +89,24 @@ function loginThroughUi(email) {
   cy.url().should('include', '/client/dashboard')
 }
 
-function fetchOtp(toEmail, bodyHint, attempt = 0) {
-  return cy.request('GET', 'http://localhost:8025/api/v2/messages').then(({ body }) => {
-    const items = body.items || []
-    const match = items.find((item) => {
-      const toHeader = (item.Content?.Headers?.To || []).join(' ')
-      const mailBody = item.Content?.Body || ''
-      return toHeader.includes(toEmail) && mailBody.includes(bodyHint)
+function clientLogin(email) {
+  return cy
+    .request('POST', `${API_BASE}/auth/client/login`, {
+      email,
+      password: Cypress.env('clientPassword'),
     })
+    .its('body.accessToken')
+}
 
-    if (match) {
-      const otpMatch = (match.Content?.Body || '').match(/\b\d{6}\b/)
-      expect(otpMatch, 'OTP code').to.not.be.null
-      return otpMatch[0]
-    }
-
-    if (attempt >= 10) {
-      throw new Error(`OTP not found for ${toEmail} / ${bodyHint}`)
-    }
-
-    cy.wait(1000)
-    return fetchOtp(toEmail, bodyHint, attempt + 1)
-  })
+function mobileApprovePayment(clientToken, paymentId) {
+  return cy
+    .request({
+      method: 'POST',
+      url: `${API_BASE}/payments/${paymentId}/approve`,
+      headers: { Authorization: `Bearer ${clientToken}` },
+      body: { mode: 'code' },
+    })
+    .its('body.verificationCode')
 }
 
 describe('Cross-client prenos', () => {
@@ -177,12 +173,23 @@ describe('Cross-client prenos', () => {
         cy.get('input[type="number"]').clear().type('150')
         cy.get('input[placeholder="Svrha prenosa"]').clear().type(testData.purpose)
 
+        // Intercept prenos create to get ID
+        cy.intercept('POST', `${API_BASE}/prenos`).as('createPrenos')
+
         cy.contains('button', 'Nastavi').click()
         cy.contains('button', /^Potvrdi$/).click()
 
-        fetchOtp(testData.sender.email, testData.purpose).then((otp) => {
-          cy.get('input[maxlength="6"]').clear().type(otp)
-          cy.contains('button', 'Potvrdi kod').click()
+        // Get prenos ID, simulate mobile approve to get OTP
+        cy.wait('@createPrenos').then((interception) => {
+          const prenosId = interception.response.body?.prenos?.id
+          expect(prenosId, 'prenos ID').to.exist
+
+          clientLogin(testData.sender.email).then((clientToken) => {
+            mobileApprovePayment(clientToken, prenosId).then((code) => {
+              cy.get('input[maxlength="6"]').clear().type(code)
+              cy.contains('button', 'Potvrdi kod').click()
+            })
+          })
         })
 
         cy.contains('button', 'Novi prenos').should('be.visible')

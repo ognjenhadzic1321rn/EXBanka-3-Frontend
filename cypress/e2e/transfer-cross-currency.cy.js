@@ -5,7 +5,6 @@ import {
   activateClient,
   loginClientUi,
   createAccount,
-  fetchOtp,
 } from './helpers/banking'
 
 describe('Cross-currency transfer', () => {
@@ -65,31 +64,23 @@ describe('Cross-currency transfer', () => {
         cy.visit('/client/transfers')
         cy.contains('h1', 'Transferi').should('be.visible')
 
-        // Select from RSD
         cy.get('.tf-card-primary .tf-field select')
           .eq(0)
           .select(String(testData.rsdAccount.id))
 
-        // Select to EUR
         cy.get('.tf-card-primary .tf-field select')
           .eq(1)
           .select(String(testData.eurAccount.id))
 
         cy.get('input[type="number"]').clear().type('1000')
         cy.get('input[placeholder="Svrha transakcije"]').clear().type(testData.purpose)
-        cy.contains('button', 'Nastavi').click()
 
-        // Confirm: should show kurs and provizija for cross-currency
+        cy.contains('button', 'Nastavi').click()
         cy.contains('span', 'Provizija').should('be.visible')
         cy.contains('span', 'Kurs').should('be.visible')
         cy.contains('button', 'Potvrdi transfer').click()
 
-        // OTP
-        fetchOtp(testData.client.email, testData.purpose).then((otp) => {
-          cy.get('input[maxlength="6"]').clear().type(otp)
-          cy.contains('button', 'Verifikuj transfer').click()
-        })
-
+        // Transfer is auto-confirmed (same-client, no mobile OTP needed)
         cy.contains('Transfer uspesno realizovan!').should('be.visible')
       })
   })

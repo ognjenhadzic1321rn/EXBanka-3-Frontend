@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useClientAccountStore } from '../../stores/clientAccount'
 import { useTransferStore } from '../../stores/transfer'
@@ -11,9 +11,22 @@ const clientAuthStore = useClientAuthStore()
 const accountStore = useClientAccountStore()
 const transferStore = useTransferStore()
 
-const step = ref<'form' | 'confirm' | 'success'>('form')
+const step = ref<'form' | 'confirm' | 'verify' | 'success'>('form')
+const verifyCode = ref('')
+const verifyError = ref('')
 const formError = ref('')
+const verifySecondsLeft = ref(300)
+const codeExpired = ref(false)
+const failedAttempts = ref(0)
+const maxAttempts = 3
 const preparingConfirm = ref(false)
+let verifyTimerInterval: ReturnType<typeof setInterval> | null = null
+
+const verifyCountdown = computed(() => {
+  const m = Math.floor(verifySecondsLeft.value / 60)
+  const s = verifySecondsLeft.value % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+})
 
 const form = ref({
   fromAccountId: (route.query.fromAccountId as string) || '',
@@ -22,6 +35,7 @@ const form = ref({
   svrha: '',
 })
 
+const lastCreated = ref<any>(null)
 const preview = ref<TransferPreview | null>(null)
 
 const clientId = computed(() => String(clientAuthStore.client?.id ?? ''))
@@ -81,24 +95,103 @@ async function goToConfirm() {
 async function handleSubmit() {
   try {
     transferStore.clearError()
-    await transferStore.createTransfer({
+    const result = await transferStore.createTransfer({
       racunPosiljaocaId: Number(form.value.fromAccountId),
       racunPrimaocaId: Number(form.value.toAccountId),
       iznos: Number(form.value.iznos),
       svrha: form.value.svrha,
     })
+    lastCreated.value = result
+    if (result?.status === 'uspesno') {
+      await accountStore.fetchAccounts(clientId.value)
+      await transferStore.fetchByClient(clientId.value)
+      step.value = 'success'
+      return
+    }
+    verifyCode.value = ''
+    verifyError.value = ''
+    setStep('verify')
+  } catch {
+    setStep('form')
+  }
+}
+
+async function handleVerify() {
+  if (!lastCreated.value || verifyCode.value.length !== 6) return
+  try {
+    verifyError.value = ''
+    await transferStore.verifyTransfer(String(lastCreated.value.id), verifyCode.value)
     await accountStore.fetchAccounts(clientId.value)
     await transferStore.fetchByClient(clientId.value)
     step.value = 'success'
-  } catch {
-    // error is shown via transferStore.error
+  } catch (error: any) {
+    const data = error?.response?.data
+    const remainingAttempts = Number(data?.attempts_remaining)
+    const status = typeof data?.status === 'string' ? data.status : ''
+    const code = typeof data?.code === 'string' ? data.code : ''
+
+    if (!Number.isNaN(remainingAttempts)) {
+      failedAttempts.value = Math.max(0, maxAttempts - remainingAttempts)
+    } else if (code === 'invalid_verification_code') {
+      failedAttempts.value = Math.min(failedAttempts.value + 1, maxAttempts)
+    }
+
+    verifyError.value =
+      (typeof data === 'string' ? data : data?.message) ||
+      transferStore.error ||
+      'Verifikacija transfera nije uspela.'
+
+    if (code === 'verification_code_expired' || code === 'verification_attempts_exceeded' || status === 'stornirano') {
+      codeExpired.value = true
+      if (verifyTimerInterval) {
+        clearInterval(verifyTimerInterval)
+        verifyTimerInterval = null
+      }
+    }
+
+    await transferStore.fetchByClient(clientId.value)
+  }
+}
+
+function startVerifyTimer() {
+  verifySecondsLeft.value = 300
+  codeExpired.value = false
+  failedAttempts.value = 0
+  if (verifyTimerInterval) clearInterval(verifyTimerInterval)
+  verifyTimerInterval = setInterval(() => {
+    if (verifySecondsLeft.value > 0) {
+      verifySecondsLeft.value--
+    } else {
+      codeExpired.value = true
+      clearInterval(verifyTimerInterval!)
+      verifyTimerInterval = null
+    }
+  }, 1000)
+}
+
+function setStep(newStep: 'form' | 'confirm' | 'verify' | 'success') {
+  step.value = newStep
+  if (newStep === 'verify') {
+    startVerifyTimer()
+  } else if (verifyTimerInterval) {
+    clearInterval(verifyTimerInterval)
+    verifyTimerInterval = null
   }
 }
 
 function startNew() {
   form.value = { fromAccountId: '', toAccountId: '', iznos: '', svrha: '' }
   preview.value = null
+  verifyCode.value = ''
+  verifyError.value = ''
   formError.value = ''
+  if (verifyTimerInterval) {
+    clearInterval(verifyTimerInterval)
+    verifyTimerInterval = null
+  }
+  verifySecondsLeft.value = 300
+  codeExpired.value = false
+  failedAttempts.value = 0
   step.value = 'form'
 }
 
@@ -175,7 +268,9 @@ onMounted(async () => {
   }
 })
 
-
+onUnmounted(() => {
+  if (verifyTimerInterval) clearInterval(verifyTimerInterval)
+})
 </script>
 
 <template>
@@ -268,11 +363,40 @@ onMounted(async () => {
               <span>{{ form.svrha }}</span>
             </div>
           </div>
-          <div v-if="transferStore.error" class="tf-error">{{ transferStore.error }}</div>
           <div class="tf-actions">
-            <button class="tf-btn tf-btn-sec" @click="step = 'form'">Ne</button>
+            <button class="tf-btn tf-btn-sec" @click="setStep('form')">Nazad</button>
             <button class="tf-btn" :disabled="transferStore.loading" @click="handleSubmit">
-              {{ transferStore.loading ? 'Saljem...' : 'Da, potvrdi' }}
+              {{ transferStore.loading ? 'Saljem...' : 'Potvrdi transfer' }}
+            </button>
+          </div>
+        </div>
+
+        <div v-else-if="step === 'verify'" class="tf-verify">
+          <div class="tf-verify-icon">✉</div>
+          <p class="tf-verify-text">Unesite verifikacioni kod koji ste primili emailom.</p>
+          <div class="tf-countdown" :class="{ 'tf-countdown-expired': codeExpired }">
+            <span v-if="!codeExpired">Kod istice za: <strong>{{ verifyCountdown }}</strong></span>
+            <span v-else>Kod je istekao.</span>
+          </div>
+          <div class="tf-attempts">
+            Preostalo pokusaja: <strong>{{ maxAttempts - failedAttempts }}</strong>
+          </div>
+          <div class="tf-field">
+            <label>Verifikacioni kod</label>
+            <input
+              v-model="verifyCode"
+              type="text"
+              maxlength="6"
+              placeholder="6-cifreni kod"
+              :disabled="codeExpired"
+              @keyup.enter="handleVerify"
+            />
+          </div>
+          <div v-if="verifyError" class="tf-error">{{ verifyError }}</div>
+          <div class="tf-actions">
+            <button class="tf-btn tf-btn-sec" @click="setStep('form')">Otkazi</button>
+            <button class="tf-btn" :disabled="verifyCode.length !== 6 || codeExpired" @click="handleVerify">
+              Verifikuj transfer
             </button>
           </div>
         </div>
@@ -368,7 +492,18 @@ onMounted(async () => {
 .tf-confirm-row:last-child { border-bottom: none; }
 .tf-confirm-label { color: rgba(255,255,255,0.5); font-size: 13px; }
 .tf-confirm-amount { font-size: 18px; font-weight: 700; }
-
+.tf-verify { text-align: center; padding: 8px 0; }
+.tf-verify-icon { font-size: 40px; margin-bottom: 10px; }
+.tf-verify-text { font-size: 14px; color: rgba(255,255,255,0.7); margin-bottom: 12px; }
+.tf-countdown {
+  font-size: 13px; color: rgba(255,255,255,0.6);
+  margin-bottom: 16px; padding: 6px 12px;
+  background: rgba(255,255,255,0.08); border-radius: 6px; display: inline-block;
+}
+.tf-countdown strong { color: #93c5fd; font-size: 15px; }
+.tf-countdown-expired { background: rgba(239,68,68,0.2); color: #fca5a5; }
+.tf-attempts { font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 16px; }
+.tf-attempts strong { color: rgba(255,255,255,0.9); }
 .tf-success { text-align: center; padding: 32px 0; }
 .tf-success-icon { font-size: 48px; color: #4ade80; margin-bottom: 12px; }
 .tf-success-text { font-size: 18px; margin-bottom: 20px; }
