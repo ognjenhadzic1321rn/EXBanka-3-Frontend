@@ -74,6 +74,11 @@ const router = createRouter({
           meta: { employeeSupervisorOnly: true },
         },
         {
+          path: 'tax',
+          component: () => import('../views/EmployeeTaxTrackingView.vue'),
+          meta: { employeeSupervisorOnly: true },
+        },
+        {
           path: 'loans/requests',
           component: () => import('../views/LoanRequestsView.vue'),
         },

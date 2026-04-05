@@ -23,6 +23,7 @@ const allNavItems = [
   { to: '/portfolio', label: 'Portfolio', icon: 'P', perm: 'stockTrading' },
   { to: '/actuaries', label: 'Aktuari', icon: 'A', perm: 'supervisor' },
   { to: '/orders', label: 'Nalozi', icon: 'N', perm: 'supervisor' },
+  { to: '/tax', label: 'Porez', icon: 'T', perm: 'supervisor' },
   { to: '/loans/requests', label: 'Zahtevi kredita', icon: 'Z', perm: 'bankOps' },
   { to: '/loans', label: 'Krediti', icon: 'K', perm: 'bankOps' },
 ]
