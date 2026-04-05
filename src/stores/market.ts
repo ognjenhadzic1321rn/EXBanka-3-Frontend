@@ -5,7 +5,6 @@ import {
   type ExchangeItem,
   type ListingHistoryItem,
   type ListingItem,
-  type PortfolioOverview,
 } from '../api/market'
 
 export const useMarketStore = defineStore('market', () => {
@@ -13,11 +12,9 @@ export const useMarketStore = defineStore('market', () => {
   const listings = ref<ListingItem[]>([])
   const currentListing = ref<ListingItem | null>(null)
   const currentHistory = ref<ListingHistoryItem[]>([])
-  const portfolio = ref<PortfolioOverview | null>(null)
 
   const loading = ref(false)
   const detailsLoading = ref(false)
-  const portfolioLoading = ref(false)
   const error = ref('')
 
   async function fetchExchanges() {
@@ -62,33 +59,16 @@ export const useMarketStore = defineStore('market', () => {
     }
   }
 
-  async function fetchPortfolio() {
-    portfolioLoading.value = true
-    error.value = ''
-    try {
-      const res = await marketApi.getPortfolio()
-      portfolio.value = res.data.portfolio
-    } catch (e: any) {
-      error.value = e.response?.data?.message || 'Failed to load portfolio.'
-      portfolio.value = null
-    } finally {
-      portfolioLoading.value = false
-    }
-  }
-
   return {
     exchanges,
     listings,
     currentListing,
     currentHistory,
-    portfolio,
     loading,
     detailsLoading,
-    portfolioLoading,
     error,
     fetchExchanges,
     fetchListings,
     fetchListingDetails,
-    fetchPortfolio,
   }
 })

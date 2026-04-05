@@ -1,46 +1,33 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { useMarketStore } from '../../stores/market'
-import { clientPortfolioApi } from '../../api/portfolio'
+import { useClientPortfolioStore } from '../../stores/portfolio'
 import type { Holding } from '../../api/portfolio'
 import BuyOrderModal from '../../components/BuyOrderModal.vue'
 import type { ListingItem } from '../../api/market'
 
-const marketStore = useMarketStore()
+const portfolioStore = useClientPortfolioStore()
 
-// Rich holdings from the new endpoint (for sell buttons)
-const holdings = ref<Holding[]>([])
-const holdingsLoading = ref(false)
-
-// Sell modal state
 const sellModalHolding = ref<Holding | null>(null)
 
-const holdingsCount = computed(() => holdings.value.length || marketStore.portfolio?.items.length || 0)
-
 const sortedHoldings = computed(() =>
-  [...holdings.value].sort((a, b) => b.marketValue - a.marketValue || a.assetTicker.localeCompare(b.assetTicker))
+  [...portfolioStore.holdings].sort((a, b) => b.marketValue - a.marketValue || a.assetTicker.localeCompare(b.assetTicker))
 )
-
-const totalValue = computed(() => holdings.value.reduce((s, h) => s + h.marketValue, 0))
-const totalUnrealizedPnL = computed(() => holdings.value.reduce((s, h) => s + h.unrealizedPnL, 0))
-const totalRealizedProfit = computed(() => holdings.value.reduce((s, h) => s + h.realizedProfit, 0))
 
 const concentrationRatio = computed(() => {
   const top = sortedHoldings.value[0]
-  if (!totalValue.value || !top) return 0
-  return (top.marketValue / totalValue.value) * 100
+  if (!portfolioStore.totalValue || !top) return 0
+  return (top.marketValue / portfolioStore.totalValue) * 100
 })
 
 const formatter = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 function formatAmount(value: number) { return formatter.format(value) }
 
 function positionShare(marketValue: number) {
-  if (!totalValue.value) return 0
-  return (marketValue / totalValue.value) * 100
+  if (!portfolioStore.totalValue) return 0
+  return (marketValue / portfolioStore.totalValue) * 100
 }
 
-// Build a minimal ListingItem from holding data to pass to BuyOrderModal
 function holdingToListing(h: Holding): ListingItem {
   return {
     ticker: h.assetTicker,
@@ -55,31 +42,14 @@ function holdingToListing(h: Holding): ListingItem {
   }
 }
 
-function openSell(h: Holding) {
-  sellModalHolding.value = h
-}
+function openSell(h: Holding) { sellModalHolding.value = h }
 
 function onSellSubmitted() {
   sellModalHolding.value = null
-  loadHoldings()
+  portfolioStore.fetchAll()
 }
 
-async function loadHoldings() {
-  holdingsLoading.value = true
-  try {
-    const res = await clientPortfolioApi.listHoldings()
-    holdings.value = res.data.holdings ?? []
-  } catch {
-    holdings.value = []
-  } finally {
-    holdingsLoading.value = false
-  }
-}
-
-onMounted(async () => {
-  await loadHoldings()
-  await marketStore.fetchPortfolio()
-})
+onMounted(() => portfolioStore.fetchAll())
 </script>
 
 <template>
@@ -92,24 +62,25 @@ onMounted(async () => {
       <RouterLink to="/client/securities" class="secondary-link">Nazad na hartije</RouterLink>
     </div>
 
-    <div v-if="holdingsLoading" class="empty-state">Ucitavam portfolio...</div>
-    <div v-else-if="!holdings.length && !holdingsLoading" class="empty-state">Portfolio trenutno nema aktivnih pozicija.</div>
+    <div v-if="portfolioStore.loading" class="empty-state">Ucitavam portfolio...</div>
+    <div v-else-if="portfolioStore.error" class="error-box">{{ portfolioStore.error }}</div>
+    <div v-else-if="!portfolioStore.holdings.length" class="empty-state">Portfolio trenutno nema aktivnih pozicija.</div>
     <template v-else>
       <div class="summary-grid">
         <article class="summary-card primary">
           <span>Ukupna procenjena vrednost</span>
-          <strong>{{ formatAmount(totalValue) }}</strong>
+          <strong>{{ formatAmount(portfolioStore.totalValue) }}</strong>
         </article>
         <article class="summary-card">
           <span>Nerealizovani P/L</span>
-          <strong :class="{ positive: totalUnrealizedPnL >= 0, negative: totalUnrealizedPnL < 0 }">
-            {{ formatAmount(totalUnrealizedPnL) }}
+          <strong :class="{ positive: portfolioStore.totalUnrealizedPnL >= 0, negative: portfolioStore.totalUnrealizedPnL < 0 }">
+            {{ formatAmount(portfolioStore.totalUnrealizedPnL) }}
           </strong>
         </article>
         <article class="summary-card">
           <span>Realizovani profit</span>
-          <strong :class="{ positive: totalRealizedProfit >= 0, negative: totalRealizedProfit < 0 }">
-            {{ formatAmount(totalRealizedProfit) }}
+          <strong :class="{ positive: portfolioStore.totalRealizedProfit >= 0, negative: portfolioStore.totalRealizedProfit < 0 }">
+            {{ formatAmount(portfolioStore.totalRealizedProfit) }}
           </strong>
         </article>
         <article class="summary-card">
@@ -124,10 +95,10 @@ onMounted(async () => {
             <h2>Pozicije</h2>
             <span class="panel-meta">Sortirano po procenjenoj vrednosti, najvece prvo.</span>
           </div>
-          <span class="panel-meta">{{ holdingsCount }} pozicija</span>
+          <span class="panel-meta">{{ portfolioStore.holdings.length }} pozicija</span>
         </div>
 
-        <div v-if="sortedHoldings.length === 0" class="empty-inline">Portfolio trenutno nema prikazane pozicije.</div>
+        <div v-if="sortedHoldings.length === 0" class="empty-inline">Nema pozicija za prikaz.</div>
         <div v-else class="table-wrap">
           <table class="portfolio-table">
             <thead>

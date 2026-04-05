@@ -1,26 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { useEmployeeMarketStore } from '../stores/employeeMarket'
+import { useEmployeePortfolioStore } from '../stores/portfolio'
 import { employeePortfolioApi } from '../api/portfolio'
 import type { Holding } from '../api/portfolio'
 import BuyOrderModal from '../components/BuyOrderModal.vue'
 import type { ListingItem } from '../api/market'
 
-const marketStore = useEmployeeMarketStore()
+const portfolioStore = useEmployeePortfolioStore()
 
-const holdings = ref<Holding[]>([])
-const holdingsLoading = ref(false)
 const exercising = ref<number | null>(null)
 const exerciseError = ref('')
-
 const sellModalHolding = ref<Holding | null>(null)
-
-const holdingsCount = computed(() => holdings.value.length)
-
-const totalValue = computed(() => holdings.value.reduce((s, h) => s + h.marketValue, 0))
-const totalUnrealizedPnL = computed(() => holdings.value.reduce((s, h) => s + h.unrealizedPnL, 0))
-const totalRealizedProfit = computed(() => holdings.value.reduce((s, h) => s + h.realizedProfit, 0))
 
 const formatter = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 function fmt(v: number) { return formatter.format(v) }
@@ -39,13 +30,11 @@ function holdingToListing(h: Holding): ListingItem {
   }
 }
 
-function openSell(h: Holding) {
-  sellModalHolding.value = h
-}
+function openSell(h: Holding) { sellModalHolding.value = h }
 
 function onSellSubmitted() {
   sellModalHolding.value = null
-  loadHoldings()
+  portfolioStore.fetchAll()
 }
 
 async function exerciseOption(holdingId: number) {
@@ -53,7 +42,7 @@ async function exerciseOption(holdingId: number) {
   exerciseError.value = ''
   try {
     await employeePortfolioApi.exerciseOption(holdingId)
-    await loadHoldings()
+    await portfolioStore.fetchAll()
   } catch (err: any) {
     exerciseError.value = err?.response?.data?.message ?? 'Greška pri izvršavanju opcije.'
   } finally {
@@ -61,22 +50,7 @@ async function exerciseOption(holdingId: number) {
   }
 }
 
-async function loadHoldings() {
-  holdingsLoading.value = true
-  try {
-    const res = await employeePortfolioApi.listHoldings()
-    holdings.value = res.data.holdings ?? []
-  } catch {
-    holdings.value = []
-  } finally {
-    holdingsLoading.value = false
-  }
-}
-
-onMounted(async () => {
-  await loadHoldings()
-  await marketStore.fetchPortfolio()
-})
+onMounted(() => portfolioStore.fetchAll())
 </script>
 
 <template>
@@ -89,38 +63,39 @@ onMounted(async () => {
       <RouterLink to="/securities" class="secondary-link">Nazad na hartije</RouterLink>
     </div>
 
-    <div v-if="holdingsLoading" class="empty-state">Ucitavam portfolio...</div>
-    <div v-else-if="!holdings.length" class="empty-state">Portfolio trenutno nema aktivnih pozicija.</div>
+    <div v-if="portfolioStore.loading" class="empty-state">Ucitavam portfolio...</div>
+    <div v-else-if="portfolioStore.error" class="error-box">{{ portfolioStore.error }}</div>
+    <div v-else-if="!portfolioStore.holdings.length" class="empty-state">Portfolio trenutno nema aktivnih pozicija.</div>
     <template v-else>
       <div v-if="exerciseError" class="error-box" style="margin-bottom:16px">{{ exerciseError }}</div>
 
       <div class="summary-grid">
         <article class="summary-card primary">
           <span>Ukupna procenjena vrednost</span>
-          <strong>{{ fmt(totalValue) }}</strong>
+          <strong>{{ fmt(portfolioStore.totalValue) }}</strong>
         </article>
         <article class="summary-card">
           <span>Nerealizovani P/L</span>
-          <strong :class="{ positive: totalUnrealizedPnL >= 0, negative: totalUnrealizedPnL < 0 }">
-            {{ fmt(totalUnrealizedPnL) }}
+          <strong :class="{ positive: portfolioStore.totalUnrealizedPnL >= 0, negative: portfolioStore.totalUnrealizedPnL < 0 }">
+            {{ fmt(portfolioStore.totalUnrealizedPnL) }}
           </strong>
         </article>
         <article class="summary-card">
           <span>Realizovani profit</span>
-          <strong :class="{ positive: totalRealizedProfit >= 0, negative: totalRealizedProfit < 0 }">
-            {{ fmt(totalRealizedProfit) }}
+          <strong :class="{ positive: portfolioStore.totalRealizedProfit >= 0, negative: portfolioStore.totalRealizedProfit < 0 }">
+            {{ fmt(portfolioStore.totalRealizedProfit) }}
           </strong>
         </article>
         <article class="summary-card">
           <span>Broj pozicija</span>
-          <strong>{{ holdingsCount }}</strong>
+          <strong>{{ portfolioStore.holdings.length }}</strong>
         </article>
       </div>
 
       <section class="panel">
         <div class="panel-head">
           <h2>Pozicije</h2>
-          <span>{{ holdingsCount }} stavki</span>
+          <span>{{ portfolioStore.holdings.length }} stavki</span>
         </div>
 
         <div class="table-wrap">
@@ -139,7 +114,7 @@ onMounted(async () => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in holdings" :key="item.id">
+              <tr v-for="item in portfolioStore.holdings" :key="item.id">
                 <td class="ticker">
                   <RouterLink :to="`/securities/${item.assetTicker}`">{{ item.assetTicker }}</RouterLink>
                 </td>

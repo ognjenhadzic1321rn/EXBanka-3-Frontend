@@ -4,7 +4,6 @@ import type {
   ListingHistoryItem,
   ListingItem,
   OptionsChain,
-  PortfolioOverview,
 } from './market'
 
 export const employeeMarketApi = {
@@ -16,6 +15,5 @@ export const employeeMarketApi = {
   getListing: (ticker: string) => api.get<{ listing: ListingItem }>(`/listings/${ticker}`),
   getListingHistory: (ticker: string) =>
     api.get<{ ticker: string; history: ListingHistoryItem[] }>(`/listings/${ticker}/history`),
-  getPortfolio: () => api.get<{ portfolio: PortfolioOverview }>('/portfolio'),
   getOptionsChain: (ticker: string) => api.get<OptionsChain>(`/listings/${ticker}/options`),
 }

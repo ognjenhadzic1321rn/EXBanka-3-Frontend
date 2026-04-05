@@ -60,35 +60,6 @@ export interface OptionsChain {
   count: number
 }
 
-export interface PortfolioItem {
-  ticker: string
-  name: string
-  exchange: string
-  currency: string
-  quantity: number
-  averagePrice: number
-  currentPrice: number
-  marketValue: number
-  pnl: number
-  pnlPercent: number
-}
-
-export interface PortfolioOverview {
-  ownerId: string
-  ownerType: string
-  generatedAt: string
-  valuationAsOf: string
-  valuationCurrency: string
-  estimatedValue: number
-  unrealizedPnL: number
-  positionCount: number
-  readOnly: boolean
-  modelType: string
-  positionSource: string
-  pricingSource: string
-  items: PortfolioItem[]
-}
-
 export const marketApi = {
   listExchanges: () => clientApi.get<{ exchanges: ExchangeItem[]; count: number }>('/exchanges'),
   listListings: (q = '', type = '') => clientApi.get<{ listings: ListingItem[]; count: number; query: string }>('/listings', {
@@ -96,6 +67,5 @@ export const marketApi = {
   }),
   getListing: (ticker: string) => clientApi.get<{ listing: ListingItem }>(`/listings/${ticker}`),
   getListingHistory: (ticker: string) => clientApi.get<{ ticker: string; history: ListingHistoryItem[] }>(`/listings/${ticker}/history`),
-  getPortfolio: () => clientApi.get<{ portfolio: PortfolioOverview }>('/portfolio'),
   getOptionsChain: (ticker: string) => clientApi.get<OptionsChain>(`/listings/${ticker}/options`),
 }
